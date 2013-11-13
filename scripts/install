@@ -25,16 +25,23 @@ yum help help > /dev/null 2>&1 && osfamily='RedHat'
 color_echo cyan "Detected OS based on: ${osfamily}"
 
 # Check if we have root permissions or if sudo is available
-if [ "$(whoami)" != "root" ] &&  ! sudo -h > /dev/null 2>&1; then
-	color_echo red "This script needs to be run as root or sudo needs to be installed on the machine"
+if [ $EUID -ne 0 ]; then
+	color_echo red "This script needs to be run as root with sudo"
 	exit 1
 fi
+
+# Create info variables for fetching RPMs
+release="`uname -r`"
+flavour="`echo ${release} | awk -F\. '{print substr ($4,0,2)}'`"
+major_version="`echo ${release} | awk -F\. '{print substr ($4,3,3)}'`"
+platform="`uname -m`"
 
 # Install method depends on OS family
 case "${osfamily}" in
     RedHat)
+        wget -qO - http://dl.fedoraproject.org/pub/epel/6/${platform}/epel-release-6-8.noarch.rpm | sudo rpm -Uhv -
         # Could use a repo to fall back to for getting the package
-        yum install zbackup
+        yum --enablerepo=epel -y install fuse-sshfs zbackup pwgen
     ;;
     Debian)
         apt-get update
@@ -43,8 +50,21 @@ case "${osfamily}" in
             sudo add-apt-repository ppa:jarl/zbackup
             apt-get update
         fi
-        color_echo green "Installing zbackup"
-        apt-get install zbackup
+        color_echo green "Installing zbackup and sshfs"
+        apt-get install zbackup sshfs pwgen
     ;;
     *) color_echo red "Unknown Operating System, can't continue" && exit 1;;
 esac
+
+backup_password="`/usr/bin/pwgen -s -1 32`"
+
+
+
+
+Add code to autogenerate password phrase and output to screen
+tell people to take really good care of the password
+also add flag to specify password
+
+Add code to generate zbackup init stuff
+
+Add server configuration?
