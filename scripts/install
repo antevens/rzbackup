@@ -1,3 +1,50 @@
 #!/bin/bash
 
-#sudo add-apt-repository ppa:jarl/zbackup
+# Color Constants
+black='\e[0;30m'
+red='\e[0;31m'
+green='\e[0;32m'
+yellow='\e[0;33m'
+blue='\e[0;34m'
+magenta='\e[0;35m'
+purple=${magenta} # Alias
+cyan='\e[0;36m'
+white='\e[0;37m'
+blank='\e[0m' # No Color
+
+# Colored echo
+# takes color and message as parameters, valid colors are listed in the constants section
+function color_echo {
+        eval color=\$$1
+        echo -e "${color}${2}${blank}"
+}
+
+osfamily='Unknown'
+apt-get help > /dev/null 2>&1 && osfamily='Debian'
+yum help help > /dev/null 2>&1 && osfamily='RedHat'
+color_echo cyan "Detected OS based on: ${osfamily}"
+
+# Check if we have root permissions or if sudo is available
+if [ "$(whoami)" != "root" ] &&  ! sudo -h > /dev/null 2>&1; then
+	color_echo red "This script needs to be run as root or sudo needs to be installed on the machine"
+	exit 1
+fi
+
+# Install method depends on OS family
+case "${osfamily}" in
+    RedHat)
+        # Could use a repo to fall back to for getting the package
+        yum install zbackup
+    ;;
+    Debian)
+        apt-get update
+        if ! apt-cache show zbackup
+            color_echo green "Adding ppa:jarl/zbackup apt repository"
+            sudo add-apt-repository ppa:jarl/zbackup
+            apt-get update
+        fi
+        color_echo green "Installing zbackup"
+        apt-get install zbackup
+    ;;
+    *) color_echo red "Unknown Operating System, can't continue" && exit 1;;
+esac
