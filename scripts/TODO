@@ -1,0 +1,4 @@
+Create scripts to configure a zbackup server with:
+
+chroots
+secure file systems which can't be overwritten even by user uploading backups

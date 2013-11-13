@@ -1,5 +1,27 @@
 #!/bin/bash
 
+# Set default permissions on newly created files so that only owner has
+# read/write access and nobody else, results in 500 permissions
+
+umask 0177
+
+# Constants
+default_password_file='/etc/zbackup.pwd'
+default_remote_user=$hostname
+default_remote_host="backup.${domainname}"
+default_remote_dir="/home/${hostname}"
+default_backup_secret="`/usr/bin/pwgen -s -1 32`"
+
+# When parameter handling gets added make sure the secret can't be entered as a
+# parameter but only via a prompt to protect the password
+
+# Variables
+password_file=$default_password_file
+remote_user=$default_remote_user
+remote_host=$default_remote_host
+remote_dir=$default_remote_dir
+backup_secret=$default_packup_secret
+
 # Color Constants
 black='\e[0;30m'
 red='\e[0;31m'
@@ -23,6 +45,38 @@ osfamily='Unknown'
 apt-get help > /dev/null 2>&1 && osfamily='Debian'
 yum help help > /dev/null 2>&1 && osfamily='RedHat'
 color_echo cyan "Detected OS based on: ${osfamily}"
+
+# Traps for cleaning up on exit
+# Originally from http://www.linuxjournal.com/content/use-bash-trap-statement-cleanup-temporary-files
+declare -a on_sig_items
+
+function on_exit()
+{
+    color_echo magenta "Received SIGEXIT, Cleaning up: $i"
+    for i in "${on_sig_items[@]}"; do
+	debug 10 "Executing cleanup statement: $i"
+      	eval $i
+    done
+}
+
+function on_break()
+{
+    color_echo red "Signal receied, unexpected exit"
+    for i in "${on_sig_items[@]}"; do
+        color_echo red "Executing cleanup statement: $i"
+        eval $i
+    done
+}
+
+function add_on_sig()
+{
+    local n=${#on_sig_items[*]}
+    on_sig_items[$n]="$*"
+    if [[ $n -eq 0 ]]; then
+        trap on_exit EXIT
+	trap on_break INT QUIT TERM
+    fi
+}
 
 # Check if we have root permissions or if sudo is available
 if [ $EUID -ne 0 ]; then
@@ -56,15 +110,36 @@ case "${osfamily}" in
     *) color_echo red "Unknown Operating System, can't continue" && exit 1;;
 esac
 
-backup_password="`/usr/bin/pwgen -s -1 32`"
+# Verify password file exists, if not then we create one and tell the user
+if ! [ -f ${password_file} ] ; then
+    color_echo green "No password file found, creating secret in ${password_file}"
+    echo "${backup_secret}" > "${password_file}"
+    color_echo magenta "Created password file with secret: ${backup_secret}"
+    color_echo magenta "Please store this secret or the file somewhere safe, without it you will not be able to restore any backups"
+fi
 
+# Create secure temporary directory for mount point
+tmp_dir="`/bin/mktemp -d`"
 
+# Set signal handler to clean up directory on signal/exit but only if it's
+# empty as it should be if unmount was successful
+add_on_sig rmdir "${tmp_dir}"
 
+# Mount fuse sshfs filesystem
+# Automaticaly unmount ssh fuse filesystem on signal/exit
+/usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} && add_on_Sig /bin/fusermount -u ${tmp_dir}
 
-Add code to autogenerate password phrase and output to screen
-tell people to take really good care of the password
-also add flag to specify password
+# Verify zbackup structure exists in remote/target directory
+if ! [ -d "${tmp_dir}/backups" ] && [ -d "${tmp_dir}/bundles" ] && [ -d "${tmp_dir}/index" ] && [ -f "${tmp_dir}/info" ]; then
+    color_echo green "creating remote zbackup structure"
+    /usr/bin/zbackup init "${tmp_dir}" --password-file /etc/zbackup.pwd
+else
+    color_echo red "zbackup structure found in target directory, will not overwrite, exiting!"
+    exit -1
+fi
 
-Add code to generate zbackup init stuff
+color_echo green "Successfully installed and configured zbackup"
 
-Add server configuration?
+# Exit gracefully, triggering cleanup including unmount and removal of
+# temporary directory
+exit 0

@@ -1,11 +1,14 @@
 #!/bin/bash -e
 set -e
 
+# Backups are not allowed to change anything
+# results in 400 permissions where even owner
+# Can't change files
+
+umask 0277
+
 # Timestamp, the date/time we started
 start_time=$(date +"%Y-%m-%d-%H-%M")
-
-# Log start
-/usr/bin/logger "zbackup started at ${start_time}"
 
 # Hostname
 hostname="`/bin/hostname`"
@@ -18,7 +21,7 @@ default_remote_user=$hostname
 default_remote_host="backup.${domainname}"
 default_remote_dir="/home/${hostname}"
 
-# Set variables
+# Variables
 password_file=$default_password_file
 source_dir=$default_source_dir
 remote_user=$default_remote_user
@@ -41,8 +44,12 @@ blank='\e[0m' # No Color
 # takes color and message as parameters, valid colors are listed in the constants section
 function color_echo {
         eval color=\$$1
-        echo -e "${color}${2}${blank}"
+        /bin/echo -e "${color}${2}${blank}"
+        /usr/bin/logger "zbackup: ${2}"
 }
+
+# Log start
+color_echo "Started at ${start_time}"
 
 # Traps for cleaning up on exit
 # Originally from http://www.linuxjournal.com/content/use-bash-trap-statement-cleanup-temporary-files
@@ -51,7 +58,6 @@ declare -a on_sig_items
 function on_exit()
 {
     color_echo magenta "Received SIGEXIT, Cleaning up: $i"
-    /usr/bin/logger "zbackup exiting"
     for i in "${on_sig_items[@]}"; do
 	debug 10 "Executing cleanup statement: $i"
       	eval $i
@@ -61,7 +67,6 @@ function on_exit()
 function on_break()
 {
     color_echo red "Signal receied, unexpected exit"
-    /usr/bin/logger "zbackup exited due to an unexpected signal/error"
     for i in "${on_sig_items[@]}"; do
         color_echo red "Executing cleanup statement: $i"
         eval $i
@@ -80,7 +85,7 @@ function add_on_sig()
 
 # Verify password file exists
 if ! [ -f ${password_file} ] ; then
-    color_echo red "Password file not found or does not have correct permissions, make sure ${password_file} exists and is readable by the backup process"
+    color_echo red "Password file not found, make  sure ${password_file} exists and is readable by the backup process"
 fi
 
 # Verify password file permissions are correct and warn if they are not
@@ -112,8 +117,8 @@ backup_result="`/usr/bin/time /bin/tar c --exclude={'/proc/*','/sys/*','/tmp/*',
 end_time=$(date +"%Y-%m-%d-%H-%M")
 
 # Log results
-/usr/bin/logger "zbackup completed successfully at ${end_time}"
-/usr/bin/logger $backup_result
+color_echo green "Completed successfully at ${end_time}"
+color_echo green  $backup_result
 
 # Exit gracefully, triggering cleanup including unmount and removal of
 # temporary directory
