@@ -1,8 +1,10 @@
 This script is configured to perform encrypted compresssed backups to remote
 SSH filesystems using FUSE sshfs and zbackup.
 
-To install zbackup/rzbackup and initialize a new remote backup store run
-"rzbackup install". Make sure you copy and store the secret/password somewhere
+To install zbackup/rzbackup  run "rzbackup install".
+
+To create a new backup repository on a remote host run "rzbackup create_repo"
+Make sure you copy and store the secret/password somewhere
 safe, in case a restore is needed this secret/password will be required to
 perform a restore, without it your backups are useless.
 

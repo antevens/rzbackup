@@ -58,10 +58,11 @@ usage: $0 options
 
 Provides easy to use scripts to install, backup and restore using zbackup over SSH
 
-MODES:
-    install  Installs required packages and initializes a zbackup repository on a remote host via SSH
-    backup   Backs up a directory or file to a remote host via SSH
-    restore  Restores a backup from a remote host via SSH
+ARGUMENTS:
+    install        Installs required packages
+    create_repo    Creates a zbackup repository on the remote host via SSH
+    backup         Backs up a directory or file to a remote host via SSH
+    restore        Restores a backup from a remote host via SSH
 
 OPTIONS:
    -h    Show this message
@@ -155,7 +156,7 @@ function add_on_sig()
     on_sig_items[$n]="$*"
     if [[ $n -eq 0 ]]; then
         trap on_exit EXIT
-	trap on_break INT QUIT TERM
+	trap on_break INT QUIT TERM PIPE
     fi
 }
 
@@ -194,19 +195,26 @@ function install()
         color_echo magenta "Created password file with secret: ${backup_secret}"
         color_echo magenta "Please store this secret or the file somewhere safe, without it you will not be able to restore any backups"
     fi
+}
+
+function create_repo()
+{
+    # Verify password file exists
+    if ! [ -f ${password_file} ] ; then
+        color_echo red "Password file not found, make sure ${password_file} exists and is readable by the backup process"
+    fi
 
     # Create secure temporary directory for mount point
     tmp_dir="`/bin/mktemp -d`" || exit_on_fail "Unable to create temporary directory"
 
+    # Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
+    # and remove tmp directory but only if it's empty as it should be if
+    # unmounted successfully
+    add_on_sig /bin/fusermount -qu ${tmp_dir}
+    add_on_sig /bin/rmdir ${tmp_dir}
+
     # Mount fuse sshfs filesystem
     /usr/bin/sshfs "${remote_user}@${remote_host}:${remote_dir}" "${tmp_dir}" || exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
-
-    # Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
-    add_on_sig /bin/fusermount -u "${tmp_dir}"
-
-    # Set signal handler to clean up directory on signal/exit but only if it's
-    # empty as it should be if unmount was successful
-    add_on_sig /bin/rmdir "${tmp_dir}"
 
     # Create zbackup structure in remote/target directory
     if ! [ -d "${tmp_dir}/backups" ] && ! [ -d "${tmp_dir}/bundles" ] && ! [ -d "${tmp_dir}/index" ] && ! [ -f "${tmp_dir}/info" ]; then
@@ -226,7 +234,7 @@ function backup()
     color_echo green "Started at ${start_time}"
     # Verify password file exists
     if ! [ -f ${password_file} ] ; then
-        color_echo red "Password file not found, make  sure ${password_file} exists and is readable by the backup process"
+        color_echo red "Password file not found, make sure ${password_file} exists and is readable by the backup process"
     fi
 
     # Verify password file permissions are correct and warn if they are not
@@ -237,14 +245,15 @@ function backup()
     # Create secure temporary directory for mount point
     tmp_dir="`/bin/mktemp -d`"
 
-    # Set signal handler to clean up directory on signal/exit but only if it's
-    # empty as it should be if unmount was successful
-    add_on_sig rmdir ${tmp_dir}
+    # Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
+    # and remove tmp directory but only if it's empty as it should be if
+    # unmounted successfully
+    add_on_sig /bin/fusermount -qu "${tmp_dir}"
+    add_on_sig /bin/rmdir "${tmp_dir}"
 
     # Mount fuse sshfs filesystem
     # Automaticaly unmount ssh fuse filesystem on signal/exit
     /usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} || exit_on_fail "Failed to mount remote SSH volume: ${remote_user}@${remote_host}:${remote_dir} on ${tmp_dir}"
-    add_on_sig /bin/fusermount -u ${tmp_dir}
 
     # Verify zbackup structure exists in remote/target directory
     if ! [ -d "${tmp_dir}/backups" ] && [ -d "${tmp_dir}/bundles" ] && [ -d "${tmp_dir}/index" ] && [ -f "${tmp_dir}/info" ]; then
@@ -282,9 +291,11 @@ function restore()
     # Create secure temporary directory for mount point
     tmp_dir="`/bin/mktemp -d`"
 
-    # Set signal handler to clean up directory on signal/exit but only if it's
-    # empty as it should be if unmount was successful
-    add_on_sig rmdir ${tmp_dir}
+    # Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
+    # and remove tmp directory but only if it's empty as it should be if
+    # unmounted successfully
+    add_on_sig /bin/fusermount -qu ${tmp_dir}
+    add_on_sig /bin/rmdir ${tmp_dir}
 
     # Mount fuse sshfs filesystem
     # Automaticaly unmount ssh fuse filesystem on signal/exit
@@ -320,13 +331,20 @@ for argument in ${arguments}; do
     case ${argument} in
         install)
                 install
+                exit 0
+        ;;
+        create_repo)
+                create_repo
+                exit 0
         ;;
         backup)
                 echo running backup
                 backup
+                exit 0
         ;;
         restore)
                 restore
+                exit 0
         ;;
         -*)
             # Ignore flags, handled by getopts
@@ -340,6 +358,7 @@ for argument in ${arguments}; do
    esac
 done
 
-# Exit gracefully, triggering cleanup including unmount and removal of
-# temporary directory
-exit 0
+# If no argument was selected
+color_echo yellow "No argument specified"
+print_usage
+exit 64
