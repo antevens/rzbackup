@@ -15,7 +15,8 @@ domainname=`/bin/hostname | /bin/sed -n 's/[^.]*\.//p' | /bin/sed -n 's/.$//p' |
 # Constants
 verbosity=1
 default_password_file='/etc/zbackup.pwd'
-default_source_dir='/tmp/restore'
+default_source_dir='/boot'
+default_restore_dir='/boot'
 default_remote_user=$hostname
 default_remote_host="backup${domainname}"
 default_remote_dir="/home/${hostname}"
@@ -105,6 +106,7 @@ done
 # Variables
 password_file=$default_password_file
 source_dir=$default_source_dir
+restore_dir=$default_restore_dir
 remote_user=$default_remote_user
 remote_host=$default_remote_host
 remote_dir=$default_remote_dir
@@ -313,7 +315,7 @@ function restore()
     selected_backup_id=-1
     while [ ${selected_backup_id} -lt 0 ]; do
         color_echo white "Available backups:"
-        /usr/bin/find ${tmp_dir}/backups | sed 's,^'"${tmp_dir}\/backups\/"'$,none,' | nl -v 0
+        /usr/bin/find ${tmp_dir}/backups | sed 's,'"${tmp_dir}\/backups"'$,none,' | nl -v 0
         num_avail_backups="`/usr/bin/find ${tmp_dir}/backups  | wc -l`"
         read -p "Please choose a backup to restore or 0 to cancel restore:"
         # Make sure reply is a number in range
@@ -321,11 +323,11 @@ function restore()
         if [[ ${REPLY} =~ ${num_regex} ]] && [ ${REPLY} -le ${num_avail_backups} ]; then
             selected_backup_id=${REPLY}
             if [ ${selected_backup_id} -gt 0 ]; then
-                selected_backup="`/usr/bin/find ${tmp_dir}/backups | sed -n ${selected_backup_id}p | sed -e 's/^[ -\t]*//'`"
-                color_echo white "Selected to restore: ${selected_env}"
+                selected_backup="`/usr/bin/find ${tmp_dir}/backups | sed -n ${selected_backup_id}p`"
+                color_echo white "Selected to restor backup number: ${selected_backup_id}"
                 # Run the restore
-                cd "${source_dir}"
-                /usr/bin/zbackup restore --password-file "${password_file}" "${tmp_dir}/backups/${hostname}-${start_time}" | /bin/tar -vx
+                cd "${restore_dir}"
+                /usr/bin/zbackup restore --password-file "${password_file}" "${selected_backup}" | /bin/tar -vx
                 # Timestamp, the date/time we finished
                 end_time=$(date +"%Y-%m-%d-%H-%M")
 
