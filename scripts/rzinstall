@@ -68,7 +68,6 @@ function exit_on_fail {
     debug 10 "BASH_SOURCE: ${BASH_SOURCE[*]}"
     debug 10 "BASH_LINENO: ${BASH_LINENO[*]}"
     debug 10  "FUNCNAME: ${FUNCNAME[*]}"
-    color_echo red "Exiting and rolling back all changes!" >&2
     exit 1
 }
 
@@ -78,9 +77,9 @@ declare -a on_sig_items
 
 function on_exit()
 {
-    color_echo magenta "Received SIGEXIT, Cleaning up: $i"
+    debug 2 "Received SIGEXIT, Cleaning up: $i"
     for i in "${on_sig_items[@]}"; do
-	color_echo blue "Executing cleanup statement: $i"
+	debug 2 "Executing cleanup statement: $i"
       	eval $i
     done
 }
@@ -141,14 +140,15 @@ fi
 # Create secure temporary directory for mount point
 tmp_dir="`/bin/mktemp -d`" || exit_on_fail "Unable to create temporary directory"
 
+# Mount fuse sshfs filesystem
+/usr/bin/sshfs "${remote_user}@${remote_host}:${remote_dir}" "${tmp_dir}" || exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
+
+# Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
+add_on_sig /bin/fusermount -u "${tmp_dir}"
+
 # Set signal handler to clean up directory on signal/exit but only if it's
 # empty as it should be if unmount was successful
 add_on_sig /bin/rmdir "${tmp_dir}"
-
-# Mount fuse sshfs filesystem
-# Automaticaly unmount ssh fuse filesystem on signal/exit
-/usr/bin/sshfs "${remote_user}@${remote_host}:${remote_dir}" "${tmp_dir}" || exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
-add_on_sig /bin/fusermount -u "${tmp_dir}"
 
 # Create zbackup structure in remote/target directory
 if ! [ -d "${tmp_dir}/backups" ] && ! [ -d "${tmp_dir}/bundles" ] && ! [ -d "${tmp_dir}/index" ] && ! [ -f "${tmp_dir}/info" ]; then
