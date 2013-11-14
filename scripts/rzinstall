@@ -6,6 +6,7 @@
 umask 0177
 
 # Constants
+verbosity=1
 default_password_file='/etc/zbackup.pwd'
 default_remote_user=$hostname
 default_remote_host="backup.${domainname}"
@@ -21,6 +22,13 @@ remote_user=$default_remote_user
 remote_host=$default_remote_host
 remote_dir=$default_remote_dir
 backup_secret=$default_packup_secret
+release="`uname -r`"
+flavour="`echo ${release} | awk -F\. '{print substr ($4,0,2)}'`"
+major_version="`echo ${release} | awk -F\. '{print substr ($4,3,3)}'`"
+platform="`uname -m`"
+osfamily='Unknown'
+apt-get help > /dev/null 2>&1 && osfamily='Debian'
+yum help help > /dev/null 2>&1 && osfamily='RedHat'
 
 # Color Constants
 black='\e[0;30m'
@@ -41,10 +49,23 @@ function color_echo {
         echo -e "${color}${2}${blank}"
 }
 
-osfamily='Unknown'
-apt-get help > /dev/null 2>&1 && osfamily='Debian'
-yum help help > /dev/null 2>&1 && osfamily='RedHat'
-color_echo cyan "Detected OS based on: ${osfamily}"
+# Debug method for verbose debugging
+function debug {
+	if [ ${verbosity} -ge $1 ]; then
+		color_echo yellow "${@:2}"
+	fi
+}
+
+# Exit on failure function, takes error message as parameter
+function exit_on_fail {
+    color_echo red "${1}" >&2
+    debug 10 "[$( caller )] $*"
+    debug 10 "BASH_SOURCE: ${BASH_SOURCE[*]}"
+    debug 10 "BASH_LINENO: ${BASH_LINENO[*]}"
+    debug 10  "FUNCNAME: ${FUNCNAME[*]}"
+    color_echo red "Exiting and rolling back all changes!" >&2
+    exit 1
+}
 
 # Traps for cleaning up on exit
 # Originally from http://www.linuxjournal.com/content/use-bash-trap-statement-cleanup-temporary-files
@@ -84,13 +105,8 @@ if [ $EUID -ne 0 ]; then
 	exit 1
 fi
 
-# Create info variables for fetching RPMs
-release="`uname -r`"
-flavour="`echo ${release} | awk -F\. '{print substr ($4,0,2)}'`"
-major_version="`echo ${release} | awk -F\. '{print substr ($4,3,3)}'`"
-platform="`uname -m`"
-
 # Install method depends on OS family
+color_echo cyan "Detected OS based on: ${osfamily}"
 case "${osfamily}" in
     RedHat)
         wget -qO - http://dl.fedoraproject.org/pub/epel/6/${platform}/epel-release-6-8.noarch.rpm | sudo rpm -Uhv -
@@ -127,7 +143,8 @@ add_on_sig rmdir "${tmp_dir}"
 
 # Mount fuse sshfs filesystem
 # Automaticaly unmount ssh fuse filesystem on signal/exit
-/usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} && add_on_Sig /bin/fusermount -u ${tmp_dir}
+/usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} || exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
+add_on_sig /bin/fusermount -u ${tmp_dir}
 
 # Create zbackup structure in remote/target directory
 if ! [ -d "${tmp_dir}/backups" ] && [ -d "${tmp_dir}/bundles" ] && [ -d "${tmp_dir}/index" ] && [ -f "${tmp_dir}/info" ]; then
