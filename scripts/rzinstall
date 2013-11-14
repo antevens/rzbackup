@@ -112,7 +112,7 @@ esac
 
 # Verify password file exists, if not then we create one and tell the user
 if ! [ -f ${password_file} ] ; then
-    color_echo green "No password file found, creating secret in ${password_file}"
+    color_echo green "No password file found, creating ${password_file}"
     echo "${backup_secret}" > "${password_file}"
     color_echo magenta "Created password file with secret: ${backup_secret}"
     color_echo magenta "Please store this secret or the file somewhere safe, without it you will not be able to restore any backups"
@@ -129,7 +129,7 @@ add_on_sig rmdir "${tmp_dir}"
 # Automaticaly unmount ssh fuse filesystem on signal/exit
 /usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} && add_on_Sig /bin/fusermount -u ${tmp_dir}
 
-# Verify zbackup structure exists in remote/target directory
+# Create zbackup structure in remote/target directory
 if ! [ -d "${tmp_dir}/backups" ] && [ -d "${tmp_dir}/bundles" ] && [ -d "${tmp_dir}/index" ] && [ -f "${tmp_dir}/info" ]; then
     color_echo green "creating remote zbackup structure"
     /usr/bin/zbackup init "${tmp_dir}" --password-file /etc/zbackup.pwd

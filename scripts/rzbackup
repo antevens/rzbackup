@@ -3,7 +3,7 @@ set -e
 
 # Backups are not allowed to change anything
 # results in 400 permissions where even owner
-# Can't change files
+# can't change files
 
 umask 0277
 
