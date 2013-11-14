@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 set -e
 
 # Any files created without specific permissions get read only for user
@@ -11,7 +11,7 @@ start_time=$(date +"%Y-%m-%d-%H-%M")
 
 # Hostname
 hostname="`/bin/hostname`"
-domainname=`/bin/hostname | /bin/sed -n 's/[^.]*\.//p' || /bin/dnsdomainname 2> /dev/null`
+domainname=`/bin/hostname | /bin/sed -n 's/[^.]*\.//p' | /bin/sed -n 's/.$//p' || /bin/dnsdomainname 2> /dev/null`
 
 # Constants
 default_password_file='/etc/zbackup.pwd'
