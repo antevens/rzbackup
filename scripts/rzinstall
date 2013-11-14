@@ -80,7 +80,7 @@ function add_on_sig()
 
 # Check if we have root permissions or if sudo is available
 if [ $EUID -ne 0 ]; then
-	color_echo red "This script needs to be run as root with sudo"
+	color_echo red "This script needs to be run as root or with sudo"
 	exit 1
 fi
 
