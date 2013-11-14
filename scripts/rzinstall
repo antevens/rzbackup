@@ -18,6 +18,61 @@ default_remote_host="backup${domainname}"
 default_remote_dir="/home/${hostname}"
 default_backup_secret="`/usr/bin/pwgen -s -1 32`"
 
+# Function to print the help message
+print_usage()
+{
+cat << EOF
+usage: $0 options
+
+This script installs zbackup and provides easy to use scripts to install, backup and restore using zbackup over ssh
+
+OPTIONS:
+   -h      Show this message
+   -v	   Verbosity, common levels are 0,1,5,10
+EOF
+}
+
+# Parse command line arguments
+while getopts ":v:vh" opt; do
+	case ${opt} in
+		'h')
+			print_usage
+			exit 0
+		;;
+		'v')
+			#Optional arguments are a bit tricky with getopts but doable
+			eval next_arg="\$${OPTIND}"
+			if [ "`echo ${next_arg} | grep -v '^-'`" != "" ]; then
+				verbosity=${next_arg}
+				# Skip over the optional value so getopts does not stop processing
+				OPTIND=`expr $OPTIND + 1`
+			else
+				verbosity=10
+			fi
+			unset next_arg
+			color_echo cyan "Verbosity set to ${verbosity}"
+		;;
+		'?')
+			color_echo red "Invalid option $OPTARG"
+			print_usage
+			exit 64
+		;;
+		':')
+			color_echo red "Missing option argument for option $OPTARG"
+			print_usage
+			exit 64
+		;;
+		'*')
+			color_echo red "Unknown error while processing options"
+			print_usage
+			exit 64
+		;;
+	esac
+done
+
+echo $1
+exit
+
 # When parameter handling gets added make sure the secret can't be entered as a
 # parameter but only via a prompt to protect the password
 
