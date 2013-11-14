@@ -106,27 +106,26 @@ function add_on_sig()
 
 # Check if we have root permissions or if sudo is available
 if [ $EUID -ne 0 ]; then
-	color_echo red "This script needs to be run as root or with sudo"
-	exit 1
+	exit_on_fail "This script needs to be run as root or with sudo"
 fi
 
 # Install method depends on OS family
 color_echo cyan "Detected OS based on: ${osfamily}"
 case "${osfamily}" in
     RedHat)
-        wget -qO - "http://dl.fedoraproject.org/pub/epel/6/${platform}/epel-release-6-8.noarch.rpm" | sudo rpm -Uhv -
+        wget -qO - "http://dl.fedoraproject.org/pub/epel/6/${platform}/epel-release-6-8.noarch.rpm" | sudo rpm -Uhv - || exit_on_fail "Unable to add the EPEL repository to YUM, please add it manually"
         # Could use a repo to fall back to for getting the package
-        yum --enablerepo=epel -y install fuse-sshfs zbackup pwgen
+        yum --enablerepo=epel -y install fuse-sshfs zbackup pwgen || exit_on_fail "Unable to install requried packages fuse-sshfs, zbackup and pwgen, please install them manually"
     ;;
     Debian)
         apt-get update
         if ! apt-cache show zbackup; then
             color_echo green "Adding ppa:jarl/zbackup apt repository"
-            sudo add-apt-repository ppa:jarl/zbackup
+            sudo add-apt-repository ppa:jarl/zbackup || exit_on_fail "Unable to add zbackup apt repository, please add it manually"
             apt-get update
         fi
         color_echo green "Installing zbackup and sshfs"
-        apt-get install zbackup sshfs pwgen
+        apt-get install zbackup sshfs pwgen || exit_on_fail "Unabel to install the zbackup, sshfs and pwgen packages, please install them manually"
     ;;
     *) color_echo red "Unknown Operating System, can't continue" && exit 1;;
 esac
@@ -134,17 +133,17 @@ esac
 # Verify password file exists, if not then we create one and tell the user
 if ! [ -f "${password_file}" ] ; then
     color_echo green "No password file found, creating ${password_file}"
-    echo "${backup_secret}" > "${password_file}"
+    echo "${backup_secret}" > "${password_file}" || "Unable to write password file ${password_file}!"
     color_echo magenta "Created password file with secret: ${backup_secret}"
     color_echo magenta "Please store this secret or the file somewhere safe, without it you will not be able to restore any backups"
 fi
 
 # Create secure temporary directory for mount point
-tmp_dir="`/bin/mktemp -d`"
+tmp_dir="`/bin/mktemp -d`" || exit_on_fail "Unable to create temporary directory"
 
 # Set signal handler to clean up directory on signal/exit but only if it's
 # empty as it should be if unmount was successful
-add_on_sig rmdir "${tmp_dir}"
+add_on_sig /bin/rmdir "${tmp_dir}"
 
 # Mount fuse sshfs filesystem
 # Automaticaly unmount ssh fuse filesystem on signal/exit
@@ -154,7 +153,7 @@ add_on_sig /bin/fusermount -u "${tmp_dir}"
 # Create zbackup structure in remote/target directory
 if ! [ -d "${tmp_dir}/backups" ] && ! [ -d "${tmp_dir}/bundles" ] && ! [ -d "${tmp_dir}/index" ] && ! [ -f "${tmp_dir}/info" ]; then
     color_echo green "creating remote zbackup structure"
-    /usr/bin/zbackup init "${tmp_dir}" --password-file /etc/zbackup.pwd
+    /usr/bin/zbackup init "${tmp_dir}" --password-file /etc/zbackup.pwd || exit_on_fail "Unable to initialize new zbackup storage"
 else
     color_echo red "zbackup structure found in target directory, will not overwrite, exiting!"
     exit -1
