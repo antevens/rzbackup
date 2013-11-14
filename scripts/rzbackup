@@ -309,15 +309,33 @@ function restore()
     # Validate the repository
     validate_zbackup_repo
 
-    # Run the restore
-    cd "${source_dir}"
-    /usr/bin/zbackup restore --password-file "${password_file}" "${tmp_dir}/backups/${hostname}-${start_time}" | /bin/tar -vx
+    # Choose which backup to restore
+    selected_backup_id=-1
+    while [ ${selected_backup_id} -lt 0 ]; do
+        color_echo white "Available backups:"
+        /usr/bin/find ${tmp_dir}/backups | sed 's/backups\/$/none/' | nl -v 0
+        num_avail_backups="`/usr/bin/find ${tmp_dir}/backups  | wc -l`"
+        read -p "Please choose a backup to restore or 0 to cancel restore:"
+        # Make sure reply is a number in range
+        num_regex='^[0-9]*$'
+        if [[ ${REPLY} =~ ${num_regex} ]] && [ ${REPLY} -le ${num_avail_backups} ]; then
+            selected_backup_id=${REPLY}
+            if [ ${selected_backup_id} -gt 0 ]; then
+                selected_backup="`/usr/bin/find ${tmp_dir}/backups | sed -n ${selected_backup_id}p | sed -e 's/^[ -\t]*//'`"
+                color_echo white "Selected to restore: ${selected_env}"
+                # Run the restore
+                #cd "${source_dir}"
+                #/usr/bin/zbackup restore --password-file "${password_file}" "${tmp_dir}/backups/${hostname}-${start_time}" | /bin/tar -vx
+                # Timestamp, the date/time we finished
+                end_time=$(date +"%Y-%m-%d-%H-%M")
 
-    # Timestamp, the date/time we finished
-    end_time=$(date +"%Y-%m-%d-%H-%M")
-
-    # Log results
-    color_echo green "Backup restore completed successfully at ${end_time}"
+                # Log results
+                color_echo green "Backup restore completed successfully at ${end_time}"
+            else
+                color_echo magenta "Selected to not restore any backups"
+            fi
+        fi
+    done
 
     # Verify password file permissions are correct and warn if they are not
     if [ "`/usr/bin/stat -c %a ${password_file}`" != '600' ] ; then
