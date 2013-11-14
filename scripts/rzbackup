@@ -172,7 +172,7 @@ mount_fuse_filesystem()
     add_on_sig /bin/fusermount -qu ${tmp_dir}
     add_on_sig /bin/rmdir ${tmp_dir}
 
-    /usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
+    /usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} || exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
 }
 
 # Verify zbackup structure exists in remote/target directory
