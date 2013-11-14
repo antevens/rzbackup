@@ -1,14 +1,19 @@
-#!/bin/bash
+#!/bin/bash -e
+set -e
 
 # Set default permissions on newly created files so that only owner has
 # read/write access and nobody else, results in 500 permissions
 
 umask 0177
 
+# Hostname
+hostname="`/bin/hostname`"
+domainname=`/bin/hostname | /bin/sed -n 's/[^.]*\.//p' | /bin/sed -n 's/.$//p' || /bin/dnsdomainname 2> /dev/null`
+
 # Constants
 default_password_file='/etc/zbackup.pwd'
 default_remote_user=$hostname
-default_remote_host="backup.${domainname}"
+default_remote_host="backup${domainname}"
 default_remote_dir="/home/${hostname}"
 default_backup_secret="`/usr/bin/pwgen -s -1 32`"
 
@@ -54,7 +59,7 @@ function on_exit()
 {
     color_echo magenta "Received SIGEXIT, Cleaning up: $i"
     for i in "${on_sig_items[@]}"; do
-	debug 10 "Executing cleanup statement: $i"
+	color_echo blue "Executing cleanup statement: $i"
       	eval $i
     done
 }
@@ -93,13 +98,13 @@ platform="`uname -m`"
 # Install method depends on OS family
 case "${osfamily}" in
     RedHat)
-        wget -qO - http://dl.fedoraproject.org/pub/epel/6/${platform}/epel-release-6-8.noarch.rpm | sudo rpm -Uhv -
+        wget -qO - "http://dl.fedoraproject.org/pub/epel/6/${platform}/epel-release-6-8.noarch.rpm" | sudo rpm -Uhv -
         # Could use a repo to fall back to for getting the package
         yum --enablerepo=epel -y install fuse-sshfs zbackup pwgen
     ;;
     Debian)
         apt-get update
-        if ! apt-cache show zbackup
+        if ! apt-cache show zbackup; then
             color_echo green "Adding ppa:jarl/zbackup apt repository"
             sudo add-apt-repository ppa:jarl/zbackup
             apt-get update
@@ -111,7 +116,7 @@ case "${osfamily}" in
 esac
 
 # Verify password file exists, if not then we create one and tell the user
-if ! [ -f ${password_file} ] ; then
+if ! [ -f "${password_file}" ] ; then
     color_echo green "No password file found, creating ${password_file}"
     echo "${backup_secret}" > "${password_file}"
     color_echo magenta "Created password file with secret: ${backup_secret}"
@@ -127,10 +132,11 @@ add_on_sig rmdir "${tmp_dir}"
 
 # Mount fuse sshfs filesystem
 # Automaticaly unmount ssh fuse filesystem on signal/exit
-/usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} && add_on_Sig /bin/fusermount -u ${tmp_dir}
+/usr/bin/sshfs "${remote_user}@${remote_host}:${remote_dir}" "${tmp_dir}" || color_echo red "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details"
+add_on_sig /bin/fusermount -u "${tmp_dir}"
 
 # Create zbackup structure in remote/target directory
-if ! [ -d "${tmp_dir}/backups" ] && [ -d "${tmp_dir}/bundles" ] && [ -d "${tmp_dir}/index" ] && [ -f "${tmp_dir}/info" ]; then
+if ! [ -d "${tmp_dir}/backups" ] && ! [ -d "${tmp_dir}/bundles" ] && ! [ -d "${tmp_dir}/index" ] && ! [ -f "${tmp_dir}/info" ]; then
     color_echo green "creating remote zbackup structure"
     /usr/bin/zbackup init "${tmp_dir}" --password-file /etc/zbackup.pwd
 else
