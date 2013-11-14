@@ -2,8 +2,8 @@
 set -e
 
 # Set default permissions on newly created files so that only owner has
-# read/write access and nobody else, results in 500 permissions
-umask 0177
+# read/write access and nobody else, results in 700 permissions
+umask 0077
 
 # Timestamp, the date/time we started
 start_time=$(date +"%Y-%m-%d-%H-%M")
@@ -15,7 +15,7 @@ domainname=`/bin/hostname | /bin/sed -n 's/[^.]*\.//p' | /bin/sed -n 's/.$//p' |
 # Constants
 verbosity=1
 default_password_file='/etc/zbackup.pwd'
-default_source_dir='/'
+default_source_dir='/tmp/restore'
 default_remote_user=$hostname
 default_remote_host="backup${domainname}"
 default_remote_dir="/home/${hostname}"
@@ -160,6 +160,44 @@ function add_on_sig()
     fi
 }
 
+# Mounts FUSE sshfs filesystem
+mount_fuse_filesystem()
+{
+    # Create secure temporary directory for mount point
+    tmp_dir="`/bin/mktemp -d`" || exit_on_fail "Unable to create temporary directory"
+
+    # Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
+    # and remove tmp directory but only if it's empty as it should be if
+    # unmounted successfully
+    add_on_sig /bin/fusermount -qu ${tmp_dir}
+    add_on_sig /bin/rmdir ${tmp_dir}
+
+    /usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
+}
+
+# Verify zbackup structure exists in remote/target directory
+validate_zbackup_repo()
+{
+    if ! [ -d "${tmp_dir}/backups" ] && [ -d "${tmp_dir}/bundles" ] && [ -d "${tmp_dir}/index" ] && [ -f "${tmp_dir}/info" ]; then
+        color_echo red "zbackup structure does not exist on remote host or is damaged, try running zbackup manually!"
+        exit -1
+    fi
+}
+
+# Verify password file exists and has correct permissions
+validate_password_file()
+{
+    # Verify password file exists
+    if ! [ -f ${password_file} ] ; then
+        exit_on_fail "Password file not found, make sure ${password_file} exists and is readable by the backup process"
+    fi
+
+    # Verify password file permissions are correct and warn if they are not
+    if [ "`/usr/bin/stat -c %a ${password_file}`" != '600' ] ; then
+        color_echo red "Warning, file permissions on ${password_file} are not 600 (-rw-------) as they should be!"
+    fi
+}
+
 function install()
 {
     # Check if we have root permissions or if sudo is available
@@ -199,22 +237,11 @@ function install()
 
 function create_repo()
 {
-    # Verify password file exists
-    if ! [ -f ${password_file} ] ; then
-        color_echo red "Password file not found, make sure ${password_file} exists and is readable by the backup process"
-    fi
-
-    # Create secure temporary directory for mount point
-    tmp_dir="`/bin/mktemp -d`" || exit_on_fail "Unable to create temporary directory"
-
-    # Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
-    # and remove tmp directory but only if it's empty as it should be if
-    # unmounted successfully
-    add_on_sig /bin/fusermount -qu ${tmp_dir}
-    add_on_sig /bin/rmdir ${tmp_dir}
+    # Verify password file exists and has correct permissions
+    validate_password_file
 
     # Mount fuse sshfs filesystem
-    /usr/bin/sshfs "${remote_user}@${remote_host}:${remote_dir}" "${tmp_dir}" || exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
+    mount_fuse_filesystem
 
     # Create zbackup structure in remote/target directory
     if ! [ -d "${tmp_dir}/backups" ] && ! [ -d "${tmp_dir}/bundles" ] && ! [ -d "${tmp_dir}/index" ] && ! [ -f "${tmp_dir}/info" ]; then
@@ -225,6 +252,9 @@ function create_repo()
         exit -1
     fi
 
+    # Validate the repository
+    validate_zbackup_repo
+
     color_echo green "Successfully installed and configured zbackup"
 }
 
@@ -232,33 +262,15 @@ function backup()
 {
     # Log start
     color_echo green "Started at ${start_time}"
-    # Verify password file exists
-    if ! [ -f ${password_file} ] ; then
-        color_echo red "Password file not found, make sure ${password_file} exists and is readable by the backup process"
-    fi
 
-    # Verify password file permissions are correct and warn if they are not
-    if [ "`/usr/bin/stat -c %a ${password_file}`" != '600' ] ; then
-        color_echo red "Warning, file permissions on ${password_file} are not 600 (-rw-------) as they should be!"
-    fi
-
-    # Create secure temporary directory for mount point
-    tmp_dir="`/bin/mktemp -d`"
-
-    # Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
-    # and remove tmp directory but only if it's empty as it should be if
-    # unmounted successfully
-    add_on_sig /bin/fusermount -qu "${tmp_dir}"
-    add_on_sig /bin/rmdir "${tmp_dir}"
+    # Verify password file exists and has correct permissions
+    validate_password_file
 
     # Mount fuse sshfs filesystem
-    # Automaticaly unmount ssh fuse filesystem on signal/exit
-    /usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} || exit_on_fail "Failed to mount remote SSH volume: ${remote_user}@${remote_host}:${remote_dir} on ${tmp_dir}"
+    mount_fuse_filesystem
 
-    # Verify zbackup structure exists in remote/target directory
-    if ! [ -d "${tmp_dir}/backups" ] && [ -d "${tmp_dir}/bundles" ] && [ -d "${tmp_dir}/index" ] && [ -f "${tmp_dir}/info" ]; then
-        exit_on_fail "zbackup structure does not exist on remote host or is damaged, if this is a fresh installatation consider running the install command to create the structure!"
-    fi
+    # Validate the repository
+    validate_zbackup_repo
 
     # Runt the backup, time the execution
     backup_result="`/usr/bin/time /bin/tar c --exclude={'/proc/*','/sys/*','/tmp/*','/dev/*','/mnt*','/media','/root/*','/selinux/*'} ${source_dir} | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file}`" || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
@@ -283,29 +295,19 @@ function restore()
         color_echo magenta "Created password file with secret: ${backup_secret}"
     fi
 
+    # Verify password file exists and has correct permissions
+    validate_password_file
+
     # Verify zbackup and sshfs are installed, if not we run install
     if ! [ -f '/usr/bin/sshfs' ] && [ -f '/usr/bin/zbackup' ]; then
         `/bin/pwd`/rzinstall
     fi
 
-    # Create secure temporary directory for mount point
-    tmp_dir="`/bin/mktemp -d`"
-
-    # Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
-    # and remove tmp directory but only if it's empty as it should be if
-    # unmounted successfully
-    add_on_sig /bin/fusermount -qu ${tmp_dir}
-    add_on_sig /bin/rmdir ${tmp_dir}
-
     # Mount fuse sshfs filesystem
-    # Automaticaly unmount ssh fuse filesystem on signal/exit
-    /usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} && add_on_Sig /bin/fusermount -u ${tmp_dir}
+    mount_fuse_filesystem
 
-    # Verify zbackup structure exists in remote/target directory
-    if ! [ -d "${tmp_dir}/backups" ] && [ -d "${tmp_dir}/bundles" ] && [ -d "${tmp_dir}/index" ] && [ -f "${tmp_dir}/info" ]; then
-        color_echo red "zbackup structure does not exist on remote host or is damaged, try running zbackup manually!"
-        exit -1
-    fi
+    # Validate the repository
+    validate_zbackup_repo
 
     # Run the restore
     cd "${source_dir}"
