@@ -1,4 +1,7 @@
 Create scripts to configure a zbackup server with:
+    chroots
+    secure write only file system
+    file system quotas
 
-chroots
-secure file systems which can't be overwritten even by user uploading backups
+Finish restore functionality to allow user to pick a remote backup
+Set backup process priority low

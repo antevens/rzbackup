@@ -1,14 +1,17 @@
-These scripts are configured to perform backups to a remote SSH filesystem.
+This script is configured to perform encrypted compresssed backups to remote
+SSH filesystems using FUSE sshfs and zbackup.
 
-To install zbackup/rzbackup and initialize a new remote backup store run the
-rzinstall script. Make sure you copy and store the secret/password somewhere
-safe, in case a restore is needed this secret/password will be required to 
+To install zbackup/rzbackup and initialize a new remote backup store run
+"rzbackup install". Make sure you copy and store the secret/password somewhere
+safe, in case a restore is needed this secret/password will be required to
 perform a restore, without it your backups are useless.
 
 To run periodic backups create a cronjob pointing to the rzbackup script.
 
-To restore install a bare minimal linux server, install rzbackup and run the
-rzrestore script.
+Example cronjob: "0 0 * * * /usr/bin/rzbackup backup"
+
+To restore install a bare minimal linux server, install rzbackup and run
+"rzbackup restore".
 
 All backups are encrypted on the client before being uploaded, hence backups
 can be placed on 3rd party servers.
@@ -16,7 +19,9 @@ can be placed on 3rd party servers.
 The scripts use FUSE sshfs to communicate with a remote server where they will
 place any backups and restore from.
 
-The scripts assume that you have configured SSH keys for automatic login.
+For rzbackup to run from cron make sure that you have configured SSH keys for
+automatic login.
+
 For more information on setting up SSH keys please see:
     https://help.ubuntu.com/community/SSH/OpenSSH/Keys
     http://wiki.centos.org/HowTos/Network/SecuringSSH#head-9c5717fe7f9bb26332c9d67571200f8c1e4324bc
