@@ -30,7 +30,7 @@ domainname=`/bin/hostname | /bin/sed -n 's/[^.]*\.//p' | /bin/sed -n 's/.$//p' |
 verbosity=1
 default_password_file='/etc/zbackup.pwd'
 default_source_dir='/'
-default_restore_dir='/'
+default_restore_dir='/tmp/restore'
 default_remote_user=$hostname
 default_remote_host="backup${domainname}"
 default_remote_dir="/home/${hostname}"
@@ -377,7 +377,7 @@ function restore()
     while [ ${selected_backup_id} -lt 0 ]; do
         color_echo white "Available backups:"
         /usr/bin/find ${tmp_dir}/backups | /bin/sed 's,'"${tmp_dir}\/backups"'$,none,' | /bin/sed 's,'"${tmp_dir}\/backups\/"',,'| nl -v 0
-        num_avail_backups="`/usr/bin/find ${tmp_dir}/backups  | wc -l`"
+        num_avail_backups="`/usr/bin/find ${tmp_dir}/backups | /bin/sed -n '1!p' | /usr/bin/wc -l`"
         read -p "Please choose a backup to restore or 0 to cancel restore:"
         # Make sure reply is a number in range
         num_regex='^[0-9]*$'
