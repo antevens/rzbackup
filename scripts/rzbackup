@@ -250,6 +250,7 @@ function install()
         ;;
         Debian)
             apt-get update
+            apt-get install python-software-properties
             if ! apt-cache show zbackup; then
                 color_echo green "Adding ppa:jarl/zbackup apt repository"
                 sudo add-apt-repository ppa:jarl/zbackup || exit_on_fail "Unable to add zbackup apt repository, please add it manually"
