@@ -1,6 +1,20 @@
 #!/bin/bash -e
 set -e
 
+#License: GPL-2.0
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# This package is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
 # Set default permissions on newly created files so that only owner has
 # read/write access and nobody else, results in 700 permissions
 umask 0077
@@ -162,6 +176,20 @@ function add_on_sig()
     fi
 }
 
+# Converts relative paths to full paths,ignores invalid paths,
+finalize_path()
+{
+	eval path=\$$1
+        if [ "${path}" != "" ]; then
+            full_path="`readlink -m ${path}`"
+            debug 10 "Determining full path with directory: '${full_path}' and path: '${path}'"
+            if [ "${full_path}" != "" ]; then
+                    eval $1=${full_path}
+            fi
+        fi
+}
+
+
 # Mounts FUSE sshfs filesystem
 mount_fuse_filesystem()
 {
@@ -242,6 +270,26 @@ function install()
         color_echo magenta "Created password file with secret: ${backup_secret}"
         color_echo magenta "Please store this secret or the file somewhere safe, without it you will not be able to restore any backups"
     fi
+
+    # Figure out which directory this script is being run from and store as full path
+    script_dir="`pwd`"
+    script_name="`basename $0`"
+    finalize_path "script_dir"
+
+    # Copy myself (this script) to /usr/bin if nobody with my name is there 
+    if ! [ -f "/usr/bin/${script_name}" ]; then
+        color_echo cyan "Copying ${script_name} to /usr/bin directory for automated and future runs"
+        cp "${script_dir}/${script_name}" "/usr/bin${script_name}"
+    fi
+
+    # Generate random hour/minute for cronjob
+    # First cronjobs are scheduled at 00:00 Midnight
+    # Last cronjobs are scheduled at 05:59 AM
+    cron_hour=$((RANDOM%5+0))
+    cron_minute=$((RANDOM%59+0))
+
+    # Install daily cronjob
+    /bin/cat <(/usr/bin/crontab -l) <(echo "${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup") | crontab -
 
     color_echo green "Successfully installed zbackup"
 }

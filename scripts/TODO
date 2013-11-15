@@ -10,3 +10,5 @@ Create config file that's read at startup instead of variables in script
 Add arguments/parameters for configuration options at runtime
 Add rate limit support to transfer using pv
 Add repo purge/delete option
+Create new deb files including rzbackup script
+Move tar exclusion list to it's own file
