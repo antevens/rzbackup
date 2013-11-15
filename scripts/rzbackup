@@ -269,6 +269,7 @@ function install()
         echo "${backup_secret}" > "${password_file}" || "Unable to write password file ${password_file}!"
         color_echo magenta "Created password file with secret: ${backup_secret}"
         color_echo magenta "Please store this secret or the file somewhere safe, without it you will not be able to restore any backups"
+        color_echo magenta "In addition to storing this secret you should also store the private SSH key (id_rsa/id_dsa) in a safe place if your server does not allow password logins for restore purposes"
     fi
 
     # Figure out which directory this script is being run from and store as full path
