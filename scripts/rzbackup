@@ -279,7 +279,9 @@ function install()
     # Copy myself (this script) to /usr/bin if nobody with my name is there 
     if ! [ -f "/usr/bin/${script_name}" ]; then
         color_echo cyan "Copying ${script_name} to /usr/bin directory for automated and future runs"
-        cp "${script_dir}/${script_name}" "/usr/bin${script_name}"
+        /bin/cp "${script_dir}/${script_name}" "/usr/bin/${script_name}"
+        # Allow regular users to run the script
+        chmod go+rx "/usr/bin/${script_name}"
     fi
 
     # Generate random hour/minute for cronjob
@@ -288,8 +290,11 @@ function install()
     cron_hour=$((RANDOM%5+0))
     cron_minute=$((RANDOM%59+0))
 
-    # Install daily cronjob
-    /bin/cat <(/usr/bin/crontab -l) <(echo "${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup") | crontab -
+    # Install daily cronjob if there isn't any rzbackup cronjob already
+    if ! /usr/bin/crontab -l  | grep ${script_name} > /dev/null; then
+        color_echo cyan "Creating a cronjob for rzbackup: ${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup"
+        /bin/cat <(/usr/bin/crontab -l) <(echo "${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup") | crontab -
+    fi
 
     color_echo green "Successfully installed zbackup"
 }
