@@ -52,16 +52,16 @@ blank='\e[0m' # No Color
 # valid colors are listed in the constants section
 # also prints all messages to the syslog daemon for non-attended runs
 function color_echo {
-        eval color=\$$1
-        echo -e "${color}${2}${blank}"
-        /usr/bin/logger "rzbackup: ${2}"
+    eval color=\$$1
+    echo -e "${color}${2}${blank}"
+    /usr/bin/logger "rzbackup: ${2}"
 }
 
 # Debug method for verbose debugging
 function debug {
-	if [ ${verbosity} -ge $1 ]; then
-		color_echo yellow "${@:2}"
-	fi
+    if [ ${verbosity} -ge $1 ]; then
+        color_echo yellow "${@:2}"
+    fi
 }
 
 # Function to print the help message
@@ -86,31 +86,31 @@ EOF
 
 # Parse command line arguments
 while getopts ":vh" opt; do
-	case ${opt} in
-		'h')
-			print_usage
-			exit 0
-		;;
-		'v')
-			verbosity=10
-			color_echo cyan "Verbosity set to ${verbosity}"
-		;;
-		'?')
-			color_echo red "Invalid option $OPTARG"
-			print_usage
-			exit 64
-		;;
-		':')
-			color_echo red "Missing option argument for option $OPTARG"
-			print_usage
-			exit 64
-		;;
-		'*')
-			color_echo red "Unknown error while processing options"
-			print_usage
-			exit 64
-		;;
-	esac
+        case ${opt} in
+                'h')
+                        print_usage
+                        exit 0
+                ;;
+                'v')
+                        verbosity=10
+                        color_echo cyan "Verbosity set to ${verbosity}"
+                ;;
+                '?')
+                        color_echo red "Invalid option $OPTARG"
+                        print_usage
+                        exit 64
+                ;;
+                ':')
+                        color_echo red "Missing option argument for option $OPTARG"
+                        print_usage
+                        exit 64
+                ;;
+                '*')
+                        color_echo red "Unknown error while processing options"
+                        print_usage
+                        exit 64
+                ;;
+        esac
 done
 
 # When parameter handling gets added make sure the secret can't be entered as a
@@ -150,8 +150,8 @@ function on_exit()
 {
     debug 2 "Received SIGEXIT, Cleaning up: $i"
     for i in "${on_sig_items[@]}"; do
-	debug 2 "Executing cleanup statement: $i"
-      	eval $i
+        debug 2 "Executing cleanup statement: $i"
+        eval $i
     done
 }
 
@@ -170,14 +170,14 @@ function add_on_sig()
     on_sig_items[$n]="$*"
     if [[ $n -eq 0 ]]; then
         trap on_exit EXIT
-	trap on_break INT QUIT TERM PIPE
+        trap on_break INT QUIT TERM PIPE
     fi
 }
 
 # Converts relative paths to full paths,ignores invalid paths,
 finalize_path()
 {
-	eval path=\$$1
+        eval path=\$$1
         if [ "${path}" != "" ]; then
             full_path="`readlink -m ${path}`"
             debug 10 "Determining full path with directory: '${full_path}' and path: '${path}'"

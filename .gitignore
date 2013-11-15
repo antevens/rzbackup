@@ -4,3 +4,4 @@ debian/zbackup
 debian/files
 obj-x86_64-linux-gnu
 obj-x86-linux-gnu
+.reviewboardrc
