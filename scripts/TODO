@@ -9,3 +9,4 @@ Add cronjob support & test
 Create config file that's read at startup instead of variables in script
 Add arguments/parameters for configuration options at runtime
 Add rate limit support to transfer using pv
+Add repo purge/delete option
