@@ -16,3 +16,5 @@ Add test to look for rsa/dsa keys when running the installer
     if not offer to create
 Add test to installer to validate that authorized_keys on the server is OK
     if not offer to add
+Add detection and support for MariaDB, PostgreSQL, MySQL and any other databases
+    that need backup routines internally
