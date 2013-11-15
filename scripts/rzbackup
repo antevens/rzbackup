@@ -323,7 +323,7 @@ function restore()
     selected_backup_id=-1
     while [ ${selected_backup_id} -lt 0 ]; do
         color_echo white "Available backups:"
-        /usr/bin/find ${tmp_dir}/backups | sed 's,'"${tmp_dir}\/backups"'$,none,' | nl -v 0
+        /usr/bin/find ${tmp_dir}/backups | /bin/sed 's,'"${tmp_dir}\/backups"'$,none,' | nl -v 0
         num_avail_backups="`/usr/bin/find ${tmp_dir}/backups  | wc -l`"
         read -p "Please choose a backup to restore or 0 to cancel restore:"
         # Make sure reply is a number in range
@@ -331,9 +331,10 @@ function restore()
         if [[ ${REPLY} =~ ${num_regex} ]] && [ ${REPLY} -le ${num_avail_backups} ]; then
             selected_backup_id=${REPLY}
             if [ ${selected_backup_id} -gt 0 ]; then
-                selected_backup="`/usr/bin/find ${tmp_dir}/backups | sed -n ${selected_backup_id}p`"
-                color_echo white "Selected to restor backup number: ${selected_backup_id}"
+                selected_backup="`/usr/bin/find ${tmp_dir}/backups | /bin/grep -v "^${tmp_dir}/backups$" | /bin/sed -n ${selected_backup_id}p`"
+                color_echo white "Selected to restore backup number: ${selected_backup_id}"
                 # Run the restore
+                color_echo white "Restoring from ${selected_backup} to ${restore_dir}"
                 /usr/bin/zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | /bin/tar -x -C "${restore_dir}"
                 # Timestamp, the date/time we finished
                 end_time=$(date +"%Y-%m-%d-%H-%M")
