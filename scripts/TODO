@@ -1,7 +1,11 @@
 Create scripts to configure a zbackup server with:
     chroots
-    secure write only file system
+    secure write only file system (user not allowed to alter existing files)
     file system quotas
 
-Finish restore functionality to allow user to pick a remote backup
-Set backup process priority low
+Add convergent encryption to zbackup
+Look at ways to optimize bandwidth usage by using local tmp folder, etc
+Add cronjob support & test
+Create config file that's read at startup instead of variables in script
+Add arguments/parameters for configuration options at runtime
+Add rate limit support to transfer using pv
