@@ -376,7 +376,7 @@ function restore()
     selected_backup_id=-1
     while [ ${selected_backup_id} -lt 0 ]; do
         color_echo white "Available backups:"
-        /usr/bin/find ${tmp_dir}/backups | /bin/sed 's,'"${tmp_dir}\/backups"'$,none,' | nl -v 0
+        /usr/bin/find ${tmp_dir}/backups | /bin/sed 's,'"${tmp_dir}\/backups"'$,none,' | /bin/sed 's,'"${tmp_dir}\/backups\/"',,'| nl -v 0
         num_avail_backups="`/usr/bin/find ${tmp_dir}/backups  | wc -l`"
         read -p "Please choose a backup to restore or 0 to cancel restore:"
         # Make sure reply is a number in range
