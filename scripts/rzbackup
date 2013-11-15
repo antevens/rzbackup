@@ -293,7 +293,7 @@ function install()
     # Install daily cronjob if there isn't any rzbackup cronjob already
     if ! /usr/bin/crontab -l  | grep ${script_name} > /dev/null; then
         color_echo cyan "Creating a cronjob for rzbackup: ${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup"
-        /bin/cat <(/usr/bin/crontab -l) <(echo "${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup") | crontab -
+        /bin/cat <(/usr/bin/crontab -l) <(echo "${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup backup") | crontab -
     fi
 
     color_echo green "Successfully installed zbackup"
@@ -337,7 +337,7 @@ function backup()
     color_echo green "Backup started at ${start_time}"
 
     # Run the backup, be really nice so we don't slow down the system
-    nice -n 19 /bin/tar c --exclude={'/proc','/sys','/tmp','/dev','/mnt','/media','/selinux'} -C ${source_dir} . | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file} || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
+    nice -n 19 /bin/tar c --exclude={'./proc','./sys','./tmp','./dev','./mnt','./media','./selinux'} -C ${source_dir} . | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file} || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
 
     # Timestamp, the date/time we finished
     end_time=$(date +"%Y-%m-%d-%H-%M")
