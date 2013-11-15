@@ -12,3 +12,7 @@ Add rate limit support to transfer using pv
 Add repo purge/delete option
 Create new deb files including rzbackup script
 Move tar exclusion list to it's own file
+Add test to look for rsa/dsa keys when running the installer
+    if not offer to create
+Add test to installer to validate that authorized_keys on the server is OK
+    if not offer to add

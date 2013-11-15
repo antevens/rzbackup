@@ -8,10 +8,6 @@ Make sure you copy and store the secret/password somewhere
 safe, in case a restore is needed this secret/password will be required to
 perform a restore, without it your backups are useless.
 
-To run periodic backups create a cronjob pointing to the rzbackup script.
-
-Example cronjob: "0 0 * * * /usr/bin/rzbackup backup"
-
 To restore install a bare minimal linux server, install rzbackup and run
 "rzbackup restore".
 
