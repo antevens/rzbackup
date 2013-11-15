@@ -34,7 +34,6 @@ default_restore_dir='/tmp/restore'
 default_remote_user=$hostname
 default_remote_host="backup${domainname}"
 default_remote_dir="/home/${hostname}"
-default_backup_secret="`/usr/bin/pwgen -s -1 32`"
 
 # Color Constants
 black='\e[0;30m'
@@ -124,7 +123,6 @@ restore_dir=$default_restore_dir
 remote_user=$default_remote_user
 remote_host=$default_remote_host
 remote_dir=$default_remote_dir
-backup_secret=$default_packup_secret
 release="`uname -r`"
 flavour="`echo ${release} | awk -F\. '{print substr ($4,0,2)}'`"
 major_version="`echo ${release} | awk -F\. '{print substr ($4,3,3)}'`"
@@ -265,6 +263,7 @@ function install()
 
     # Verify password file exists, if not then we create one and tell the user
     if ! [ -f "${password_file}" ] ; then
+        backup_secret="`/usr/bin/pwgen -s -1 32`"
         color_echo green "No password file found, creating ${password_file}"
         echo "${backup_secret}" > "${password_file}" || "Unable to write password file ${password_file}!"
         color_echo magenta "Created password file with secret: ${backup_secret}"
@@ -348,14 +347,11 @@ function backup()
 
 function restore()
 {
-    # Verify password file exists, if not then we create one and ask user for
-    # the secret
-
+    # Verify password file exists, if not then we ask the user
     if ! [ -f ${password_file} ] ; then
         color_echo green "No password file found, creating ${password_file}"
         read -p "Please enter the shared secret(password) to access backups and perform restore:"
         echo "${REPLY}" > "${password_file}"
-        color_echo magenta "Created password file with secret: ${backup_secret}"
     fi
 
     # Verify password file exists and has correct permissions
