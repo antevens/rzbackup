@@ -6,7 +6,7 @@ set -e
 umask 0077
 
 # Timestamp, the date/time we started
-start_time=$(date +"%Y-%m-%d-%H-%M")
+start_time=$(date +"%Y-%m-%d-%H-%M-%S")
 
 # Hostname
 hostname="`/bin/hostname`"
@@ -16,7 +16,7 @@ domainname=`/bin/hostname | /bin/sed -n 's/[^.]*\.//p' | /bin/sed -n 's/.$//p' |
 verbosity=1
 default_password_file='/etc/zbackup.pwd'
 default_source_dir='/boot'
-default_restore_dir='/boot'
+default_restore_dir='/'
 default_remote_user=$hostname
 default_remote_host="backup${domainname}"
 default_remote_dir="/home/${hostname}"
@@ -180,9 +180,10 @@ mount_fuse_filesystem()
 # Verify zbackup structure exists in remote/target directory
 validate_zbackup_repo()
 {
-    if ! [ -d "${tmp_dir}/backups" ] && [ -d "${tmp_dir}/bundles" ] && [ -d "${tmp_dir}/index" ] && [ -f "${tmp_dir}/info" ]; then
-        color_echo red "zbackup structure does not exist on remote host or is damaged, try running zbackup manually!"
-        exit -1
+    if [ -d "${tmp_dir}/backups" ] && [ -d "${tmp_dir}/bundles" ] && [ -d "${tmp_dir}/index" ] && [ -f "${tmp_dir}/info" ]; then
+        debug 2 "Found healty zbackup structure"
+    else
+        exit_on_fail "zbackup structure does not exist on remote host or is damaged, try running zbackup manually!"
     fi
 }
 
@@ -193,6 +194,12 @@ validate_password_file()
     if ! [ -f ${password_file} ] ; then
         exit_on_fail "Password file not found, make sure ${password_file} exists and is readable by the backup process"
     fi
+
+    # Verify current user has read access to password file
+    if ! [ -r ${password_file} ] ; then
+        exit_on_fail "Password file exists but is not readable by current user, please run as a user with permissions to read ${password_file} or grant current user permissions"
+    fi
+
 
     # Verify password file permissions are correct and warn if they are not
     if [ "`/usr/bin/stat -c %a ${password_file}`" != '600' ] ; then
@@ -213,7 +220,7 @@ function install()
         RedHat)
             wget -qO - "http://dl.fedoraproject.org/pub/epel/6/${platform}/epel-release-6-8.noarch.rpm" | sudo rpm -Uhv - || exit_on_fail "Unable to add the EPEL repository to YUM, please add it manually"
             # Could use a repo to fall back to for getting the package
-            yum --enablerepo=epel -y install fuse-sshfs zbackup pwgen || exit_on_fail "Unable to install requried packages fuse-sshfs, zbackup and pwgen, please install them manually"
+            yum --enablerepo=epel -y install fuse-sshfs zbackup pwgen pv || exit_on_fail "Unable to install requried packages fuse-sshfs, pv, zbackup and pwgen, please install them manually"
         ;;
         Debian)
             apt-get update
@@ -223,7 +230,7 @@ function install()
                 apt-get update
             fi
             color_echo green "Installing zbackup and sshfs"
-            apt-get install zbackup sshfs pwgen || exit_on_fail "Unabel to install the zbackup, sshfs and pwgen packages, please install them manually"
+            apt-get install zbackup sshfs pwgen pv|| exit_on_fail "Unabel to install the zbackup, sshfs, pv and pwgen packages, please install them manually"
         ;;
         *) color_echo red "Unknown Operating System, can't continue" && exit 1;;
     esac
@@ -235,6 +242,8 @@ function install()
         color_echo magenta "Created password file with secret: ${backup_secret}"
         color_echo magenta "Please store this secret or the file somewhere safe, without it you will not be able to restore any backups"
     fi
+
+    color_echo green "Successfully installed zbackup"
 }
 
 function create_repo()
@@ -250,21 +259,18 @@ function create_repo()
         color_echo green "creating remote zbackup structure"
         /usr/bin/zbackup init "${tmp_dir}" --password-file /etc/zbackup.pwd || exit_on_fail "Unable to initialize new zbackup storage"
     else
-        color_echo red "zbackup structure found in target directory, will not overwrite, exiting!"
+        color_echo red "zbackup structures found in target directory, will not overwrite, exiting!"
         exit -1
     fi
 
     # Validate the repository
     validate_zbackup_repo
 
-    color_echo green "Successfully installed and configured zbackup"
+    color_echo green "Successfully created zbackup repo at ${remote_host}:${remote_dir}"
 }
 
 function backup()
 {
-    # Log start
-    color_echo green "Started at ${start_time}"
-
     # Verify password file exists and has correct permissions
     validate_password_file
 
@@ -274,14 +280,17 @@ function backup()
     # Validate the repository
     validate_zbackup_repo
 
+    # Log start
+    color_echo green "Backup started at ${start_time}"
+
     # Runt the backup, time the execution
-    backup_result="`/usr/bin/time /bin/tar c --exclude={'/proc/*','/sys/*','/tmp/*','/dev/*','/mnt*','/media','/root/*','/selinux/*'} ${source_dir} | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file}`" || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
+    backup_result="`/usr/bin/time /bin/tar c --exclude={'/proc/*','/sys/*','/tmp/*','/dev/*','/mnt*','/media','/root/*','/selinux/*'} -C ${source_dir} | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file}`" || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
 
     # Timestamp, the date/time we finished
     end_time=$(date +"%Y-%m-%d-%H-%M")
 
     # Log results
-    color_echo green "Completed successfully at ${end_time}"
+    color_echo green "Backup completed successfully at ${end_time}"
     color_echo green  $backup_result
 }
 
@@ -326,11 +335,9 @@ function restore()
                 selected_backup="`/usr/bin/find ${tmp_dir}/backups | sed -n ${selected_backup_id}p`"
                 color_echo white "Selected to restor backup number: ${selected_backup_id}"
                 # Run the restore
-                cd "${restore_dir}"
-                /usr/bin/zbackup restore --password-file "${password_file}" "${selected_backup}" | /bin/tar -vx
+                /usr/bin/zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | /bin/tar -x -C "${restore_dir}"
                 # Timestamp, the date/time we finished
                 end_time=$(date +"%Y-%m-%d-%H-%M")
-
                 # Log results
                 color_echo green "Backup restore completed successfully at ${end_time}"
             else
@@ -360,7 +367,6 @@ for argument in ${arguments}; do
                 exit 0
         ;;
         backup)
-                echo running backup
                 backup
                 exit 0
         ;;
