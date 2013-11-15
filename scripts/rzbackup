@@ -16,7 +16,7 @@ domainname=`/bin/hostname | /bin/sed -n 's/[^.]*\.//p' | /bin/sed -n 's/.$//p' |
 verbosity=1
 default_password_file='/etc/zbackup.pwd'
 default_source_dir='/boot'
-default_restore_dir='/'
+default_restore_dir='/boot'
 default_remote_user=$hostname
 default_remote_host="backup${domainname}"
 default_remote_dir="/home/${hostname}"
@@ -284,14 +284,13 @@ function backup()
     color_echo green "Backup started at ${start_time}"
 
     # Runt the backup, time the execution
-    backup_result="`/usr/bin/time /bin/tar c --exclude={'/proc/*','/sys/*','/tmp/*','/dev/*','/mnt*','/media','/root/*','/selinux/*'} -C ${source_dir} | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file}`" || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
+    /bin/tar c --exclude="{'/proc/*','/sys/*','/tmp/*','/dev/*','/mnt*','/media','/root/*','/selinux/*'}" -C ${source_dir} . | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file} || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
 
     # Timestamp, the date/time we finished
     end_time=$(date +"%Y-%m-%d-%H-%M")
 
     # Log results
     color_echo green "Backup completed successfully at ${end_time}"
-    color_echo green  $backup_result
 }
 
 function restore()
