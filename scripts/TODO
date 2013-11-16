@@ -1,0 +1,20 @@
+Create scripts to configure a zbackup server with:
+    chroots
+    secure write only file system (user not allowed to alter existing files)
+    file system quotas
+
+Add convergent encryption to zbackup
+Look at ways to optimize bandwidth usage by using local tmp folder, etc
+Add cronjob support & test
+Create config file that's read at startup instead of variables in script
+Add arguments/parameters for configuration options at runtime
+Add rate limit support to transfer using pv
+Add repo purge/delete option
+Create new deb files including rzbackup script
+Move tar exclusion list to it's own file
+Add test to look for rsa/dsa keys when running the installer
+    if not offer to create
+Add test to installer to validate that authorized_keys on the server is OK
+    if not offer to add
+Add detection and support for MariaDB, PostgreSQL, MySQL and any other databases
+    that need backup routines internally

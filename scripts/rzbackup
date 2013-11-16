@@ -1,0 +1,443 @@
+#!/bin/bash -e
+set -e
+
+#License: GPL-2.0
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# This package is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+# Set default permissions on newly created files so that only owner has
+# read/write access and nobody else, results in 700 permissions
+umask 0077
+
+# Timestamp, the date/time we started
+start_time=$(date +"%Y-%m-%d-%H-%M-%S")
+
+# Hostname
+hostname="`/bin/hostname`"
+domainname=`/bin/hostname | /bin/sed -n 's/[^.]*\.//p' | /bin/sed -n 's/.$//p' || /bin/dnsdomainname 2> /dev/null`
+
+# Constants
+verbosity=1
+default_password_file='/etc/zbackup.pwd'
+default_source_dir='/'
+default_restore_dir='/'
+default_remote_user=$hostname
+default_remote_host="backup${domainname}"
+default_remote_dir="/home/${hostname}"
+
+# Color Constants
+black='\e[0;30m'
+red='\e[0;31m'
+green='\e[0;32m'
+yellow='\e[0;33m'
+blue='\e[0;34m'
+magenta='\e[0;35m'
+purple=${magenta} # Alias
+cyan='\e[0;36m'
+white='\e[0;37m'
+blank='\e[0m' # No Color
+
+# Colored echo
+# takes color and message as parameters,
+# valid colors are listed in the constants section
+# also prints all messages to the syslog daemon for non-attended runs
+function color_echo {
+    eval color=\$$1
+    echo -e "${color}${2}${blank}"
+    /usr/bin/logger "rzbackup: ${2}"
+}
+
+# Debug method for verbose debugging
+function debug {
+    if [ ${verbosity} -ge $1 ]; then
+        color_echo yellow "${@:2}"
+    fi
+}
+
+# Function to print the help message
+print_usage()
+{
+cat << EOF
+usage: $0 options
+
+Provides easy to use scripts to install, backup and restore using zbackup over SSH
+
+ARGUMENTS:
+    install        Installs required packages
+    create_repo    Creates a zbackup repository on the remote host via SSH
+    backup         Backs up a directory or file to a remote host via SSH
+    restore        Restores a backup from a remote host via SSH
+
+OPTIONS:
+   -h    Show this message
+   -v    Verbose debug logging
+EOF
+}
+
+# Parse command line arguments
+while getopts ":vh" opt; do
+        case ${opt} in
+                'h')
+                        print_usage
+                        exit 0
+                ;;
+                'v')
+                        verbosity=10
+                        color_echo cyan "Verbosity set to ${verbosity}"
+                ;;
+                '?')
+                        color_echo red "Invalid option $OPTARG"
+                        print_usage
+                        exit 64
+                ;;
+                ':')
+                        color_echo red "Missing option argument for option $OPTARG"
+                        print_usage
+                        exit 64
+                ;;
+                '*')
+                        color_echo red "Unknown error while processing options"
+                        print_usage
+                        exit 64
+                ;;
+        esac
+done
+
+# When parameter handling gets added make sure the secret can't be entered as a
+# parameter but only via a prompt to protect the password
+
+# Variables
+password_file=$default_password_file
+source_dir=$default_source_dir
+restore_dir=$default_restore_dir
+remote_user=$default_remote_user
+remote_host=$default_remote_host
+remote_dir=$default_remote_dir
+release="`uname -r`"
+flavour="`echo ${release} | awk -F\. '{print substr ($4,0,2)}'`"
+major_version="`echo ${release} | awk -F\. '{print substr ($4,3,3)}'`"
+platform="`uname -m`"
+osfamily='Unknown'
+apt-get help > /dev/null 2>&1 && osfamily='Debian'
+yum help help > /dev/null 2>&1 && osfamily='RedHat'
+
+
+# Exit on failure function, takes error message as parameter
+function exit_on_fail {
+    color_echo red "${1}" >&2
+    debug 10 "[$( caller )] $*"
+    debug 10 "BASH_SOURCE: ${BASH_SOURCE[*]}"
+    debug 10 "BASH_LINENO: ${BASH_LINENO[*]}"
+    debug 10  "FUNCNAME: ${FUNCNAME[*]}"
+    exit 1
+}
+
+# Traps for cleaning up on exit
+# Originally from http://www.linuxjournal.com/content/use-bash-trap-statement-cleanup-temporary-files
+declare -a on_sig_items
+
+function on_exit()
+{
+    debug 2 "Received SIGEXIT, Cleaning up: $i"
+    for i in "${on_sig_items[@]}"; do
+        debug 2 "Executing cleanup statement: $i"
+        eval $i
+    done
+}
+
+function on_break()
+{
+    color_echo red "Signal receied, unexpected exit"
+    for i in "${on_sig_items[@]}"; do
+        color_echo red "Executing cleanup statement: $i"
+        eval $i
+    done
+}
+
+function add_on_sig()
+{
+    local n=${#on_sig_items[*]}
+    on_sig_items[$n]="$*"
+    if [[ $n -eq 0 ]]; then
+        trap on_exit EXIT
+        trap on_break INT QUIT TERM PIPE
+    fi
+}
+
+# Converts relative paths to full paths,ignores invalid paths,
+finalize_path()
+{
+        eval path=\$$1
+        if [ "${path}" != "" ]; then
+            full_path="`readlink -m ${path}`"
+            debug 10 "Determining full path with directory: '${full_path}' and path: '${path}'"
+            if [ "${full_path}" != "" ]; then
+                    eval $1=${full_path}
+            fi
+        fi
+}
+
+
+# Mounts FUSE sshfs filesystem
+mount_fuse_filesystem()
+{
+    # Create secure temporary directory for mount point
+    tmp_dir="`/bin/mktemp -d`" || exit_on_fail "Unable to create temporary directory"
+
+    # Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
+    # and remove tmp directory but only if it's empty as it should be if
+    # unmounted successfully
+    add_on_sig /bin/fusermount -qu ${tmp_dir}
+    add_on_sig /bin/rmdir ${tmp_dir}
+
+    /usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} || exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
+}
+
+# Verify zbackup structure exists in remote/target directory
+validate_zbackup_repo()
+{
+    if [ -d "${tmp_dir}/backups" ] && [ -d "${tmp_dir}/bundles" ] && [ -d "${tmp_dir}/index" ] && [ -f "${tmp_dir}/info" ]; then
+        debug 2 "Found healty zbackup structure"
+    else
+        exit_on_fail "zbackup structure does not exist on remote host or is damaged, try running zbackup manually!"
+    fi
+}
+
+# Verify password file exists and has correct permissions
+validate_password_file()
+{
+    # Verify password file exists
+    if ! [ -f ${password_file} ] ; then
+        exit_on_fail "Password file not found, make sure ${password_file} exists and is readable by the backup process"
+    fi
+
+    # Verify current user has read access to password file
+    if ! [ -r ${password_file} ] ; then
+        exit_on_fail "Password file exists but is not readable by current user, please run as a user with permissions to read ${password_file} or grant current user permissions"
+    fi
+
+
+    # Verify password file permissions are correct and warn if they are not
+    if [ "`/usr/bin/stat -c %a ${password_file}`" != '600' ] ; then
+        color_echo red "Warning, file permissions on ${password_file} are not 600 (-rw-------) as they should be!"
+    fi
+}
+
+function install()
+{
+    # Check if we have root permissions or if sudo is available
+    if [ $EUID -ne 0 ]; then
+            exit_on_fail "This script needs to be run as root or with sudo"
+    fi
+
+    # Install method depends on OS family
+    color_echo cyan "Detected OS based on: ${osfamily}"
+    case "${osfamily}" in
+        RedHat)
+            wget -qO - "http://dl.fedoraproject.org/pub/epel/6/${platform}/epel-release-6-8.noarch.rpm" | sudo rpm -Uhv - || exit_on_fail "Unable to add the EPEL repository to YUM, please add it manually"
+            # Could use a repo to fall back to for getting the package
+            yum --enablerepo=epel -y install fuse-sshfs zbackup pwgen pv || exit_on_fail "Unable to install requried packages fuse-sshfs, pv, zbackup and pwgen, please install them manually"
+        ;;
+        Debian)
+            apt-get update
+            apt-get install python-software-properties
+            if ! apt-cache show zbackup; then
+                color_echo green "Adding ppa:jarl/zbackup apt repository"
+                sudo add-apt-repository ppa:jarl/zbackup || exit_on_fail "Unable to add zbackup apt repository, please add it manually"
+                apt-get update
+            fi
+            color_echo green "Installing zbackup and sshfs"
+            apt-get install zbackup sshfs pwgen pv|| exit_on_fail "Unabel to install the zbackup, sshfs, pv and pwgen packages, please install them manually"
+        ;;
+        *) color_echo red "Unknown Operating System, can't continue" && exit 1;;
+    esac
+
+    # Verify password file exists, if not then we create one and tell the user
+    if ! [ -f "${password_file}" ] ; then
+        backup_secret="`/usr/bin/pwgen -s -1 32`"
+        color_echo green "No password file found, creating ${password_file}"
+        echo "${backup_secret}" > "${password_file}" || "Unable to write password file ${password_file}!"
+        color_echo magenta "Created password file with secret: ${backup_secret}"
+        color_echo magenta "Please store this secret or the file somewhere safe, without it you will not be able to restore any backups"
+        color_echo magenta "In addition to storing this secret you should also store the private SSH key (id_rsa/id_dsa) in a safe place if your server does not allow password logins for restore purposes"
+    fi
+
+    # Figure out which directory this script is being run from and store as full path
+    script_dir="`pwd`"
+    script_name="`basename $0`"
+    finalize_path "script_dir"
+
+    # Copy myself (this script) to /usr/bin if nobody with my name is there 
+    if ! [ -f "/usr/bin/${script_name}" ]; then
+        color_echo cyan "Copying ${script_name} to /usr/bin directory for automated and future runs"
+        /bin/cp "${script_dir}/${script_name}" "/usr/bin/${script_name}"
+        # Allow regular users to run the script
+        chmod go+rx "/usr/bin/${script_name}"
+    fi
+
+    # Generate random hour/minute for cronjob
+    # First cronjobs are scheduled at 00:00 Midnight
+    # Last cronjobs are scheduled at 05:59 AM
+    cron_hour=$((RANDOM%5+0))
+    cron_minute=$((RANDOM%59+0))
+
+    # Install daily cronjob if there isn't any rzbackup cronjob already
+    if ! /usr/bin/crontab -l  | grep ${script_name} > /dev/null; then
+        color_echo cyan "Creating a cronjob for rzbackup: ${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup"
+        /bin/cat <(/usr/bin/crontab -l) <(echo "${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup backup") | crontab -
+    fi
+
+    color_echo green "Successfully installed zbackup"
+}
+
+function create_repo()
+{
+    # Verify password file exists and has correct permissions
+    validate_password_file
+
+    # Mount fuse sshfs filesystem
+    mount_fuse_filesystem
+
+    # Create zbackup structure in remote/target directory
+    if ! [ -d "${tmp_dir}/backups" ] && ! [ -d "${tmp_dir}/bundles" ] && ! [ -d "${tmp_dir}/index" ] && ! [ -f "${tmp_dir}/info" ]; then
+        color_echo green "creating remote zbackup structure"
+        /usr/bin/zbackup init "${tmp_dir}" --password-file /etc/zbackup.pwd || exit_on_fail "Unable to initialize new zbackup storage"
+    else
+        color_echo red "zbackup structures found in target directory, will not overwrite, exiting!"
+        exit -1
+    fi
+
+    # Validate the repository
+    validate_zbackup_repo
+
+    color_echo green "Successfully created zbackup repo at ${remote_host}:${remote_dir}"
+}
+
+function backup()
+{
+    # Verify password file exists and has correct permissions
+    validate_password_file
+
+    # Mount fuse sshfs filesystem
+    mount_fuse_filesystem
+
+    # Validate the repository
+    validate_zbackup_repo
+
+    # Log start
+    color_echo green "Backup started at ${start_time}"
+
+    # Run the backup, be really nice so we don't slow down the system
+    nice -n 19 /bin/tar c --exclude={'./proc','./sys','./tmp','./dev','./mnt','./media','./selinux'} -C ${source_dir} . | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file} || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
+
+    # Timestamp, the date/time we finished
+    end_time=$(date +"%Y-%m-%d-%H-%M-%S")
+
+    # Log results
+    color_echo green "Backup completed successfully at ${end_time}"
+}
+
+function restore()
+{
+    # Verify password file exists, if not then we ask the user
+    if ! [ -f ${password_file} ] ; then
+        color_echo green "No password file found, creating ${password_file}"
+        read -p "Please enter the shared secret(password) to access backups and perform restore:"
+        echo "${REPLY}" > "${password_file}"
+    fi
+
+    # Verify password file exists and has correct permissions
+    validate_password_file
+
+    # Verify zbackup and sshfs are installed, if not we run install
+    if ! [ -f '/usr/bin/sshfs' ] && [ -f '/usr/bin/zbackup' ]; then
+        `/bin/pwd`/rzinstall
+    fi
+
+    # Mount fuse sshfs filesystem
+    mount_fuse_filesystem
+
+    # Validate the repository
+    validate_zbackup_repo
+
+    # Choose which backup to restore
+    selected_backup_id=-1
+    while [ ${selected_backup_id} -lt 0 ]; do
+        color_echo white "Available backups:"
+        /usr/bin/find ${tmp_dir}/backups | /bin/sed 's,'"${tmp_dir}\/backups"'$,none,' | /bin/sed 's,'"${tmp_dir}\/backups\/"',,'| nl -v 0
+        num_avail_backups="`/usr/bin/find ${tmp_dir}/backups | /bin/sed -n '1!p' | /usr/bin/wc -l`"
+        read -p "Please choose a backup to restore or 0 to cancel restore:"
+        # Make sure reply is a number in range
+        num_regex='^[0-9]*$'
+        if [[ ${REPLY} =~ ${num_regex} ]] && [ ${REPLY} -le ${num_avail_backups} ]; then
+            selected_backup_id=${REPLY}
+            if [ ${selected_backup_id} -gt 0 ]; then
+                selected_backup="`/usr/bin/find ${tmp_dir}/backups | /bin/grep -v "^${tmp_dir}/backups$" | /bin/sed -n ${selected_backup_id}p`"
+                color_echo white "Selected to restore backup number: ${selected_backup_id}"
+                # Run the restore
+                color_echo white "Restoring from ${selected_backup} to ${restore_dir}"
+                /usr/bin/zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | /bin/tar -x -C "${restore_dir}"
+                # Timestamp, the date/time we finished
+                end_time=$(date +"%Y-%m-%d-%H-%M")
+                # Log results
+                color_echo green "Backup restore completed successfully at ${end_time}"
+            else
+                color_echo magenta "Selected to not restore any backups"
+            fi
+        fi
+    done
+
+    # Verify password file permissions are correct and warn if they are not
+    if [ "`/usr/bin/stat -c %a ${password_file}`" != '600' ] ; then
+        color_echo red "Warning, file permissions on ${password_file} are not 600 (-rw-------) as they should be!"
+    fi
+}
+
+# "Main" function
+# Copy argument list to arguments variable
+arguments=${@}
+for argument in ${arguments}; do
+    # Parse arguments in a safe way
+    case ${argument} in
+        install)
+                install
+                exit 0
+        ;;
+        create_repo)
+                create_repo
+                exit 0
+        ;;
+        backup)
+                backup
+                exit 0
+        ;;
+        restore)
+                restore
+                exit 0
+        ;;
+        -*)
+            # Ignore flags, handled by getopts
+            debug 10 "Ignored flag ${argument}"
+        ;;
+        *)
+            color_echo red "Unknown argument ${argument}"
+            print_usage
+            exit 64
+        ;;
+   esac
+done
+
+# If no argument was selected
+color_echo yellow "No argument specified"
+print_usage
+exit 64
