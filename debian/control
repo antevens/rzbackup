@@ -2,7 +2,7 @@ Source: zbackup
 Section: utils
 Priority: extra
 Maintainer: Jarl Stefansson <jarl.stefansson@gmail.com>
-Build-Depends: debhelper (>= 8.0.0), cmake, libssl-dev, libprotobuf-dev, liblzma-dev, zlib1g-dev, protobuf-compiler, g++
+Build-Depends: debhelper (>= 7.0.0), cmake, libssl-dev, libprotobuf-dev, liblzma-dev, zlib1g-dev, protobuf-compiler, g++
 Standards-Version: 3.9.2
 Homepage: http://zbackup.org/
 Vcs-Git: git://git@github.com:jalli/zbackup.git
