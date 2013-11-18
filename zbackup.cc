@@ -296,6 +296,7 @@ void ZRestore::restoreToStdin( string const & inputFileName )
 
 DEF_EX( exNonEncryptedWithKey, "--non-encrypted and --password-file are incompatible", std::exception )
 DEF_EX( exSpecifyEncryptionOptions, "Specify either --password-file or --non-encrypted", std::exception )
+DEF_EX( exConvergentWithOutKey, "--convergent-enryption requires --password-file to store decryption keys/hashes", std::exception )
 DEF_EX_STR( exInvalidThreadsValue, "Invalid threads value specified:", std::exception )
 
 int main( int argc, char *argv[] )
@@ -382,6 +383,9 @@ int main( int argc, char *argv[] )
 "         --silent (default is verbose)\n"
 "         --threads <number> (default is %zu on your system)\n"
 "         --cache-size <number> MB (default is %zu)\n"
+"         --convergent-encryption (crypt each file with hash of itself)\n"
+"             allows deduplication across multiple servers\n"
+"             requires password to store hashes to restore/decrypt\n"
 "  Commands:\n"
 "    init <storage path> - initializes new storage;\n"
 "    backup <backup file name> - performs a backup from stdin;\n"
