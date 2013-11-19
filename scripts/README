@@ -11,7 +11,7 @@ Make sure you copy and store the secret/password somewhere
 safe, in case a restore is needed this secret/password will be required to
 perform a restore, without it your backups are useless.
 
-To perofrm a backup install rzbackup and run "rzbackup backup"
+To peroform a backup install rzbackup and run "rzbackup backup"
 
 To restore install a bare minimal linux server, install rzbackup and run
 "rzbackup restore".
@@ -37,6 +37,8 @@ this includes but is not limited to:
     4. The remote server should not allow the backup client to delete or modify
        any existing files, only add new files. This ensures that even if your
        client is compromised your backups are secure.
+       Consider running a cronjob that changes ownership, but allows read only
+       access by the users primary group which only the user belongs to.
     5. The backup server should implement quotas so that if a client is
        compromised it can't disrupt the operation of the backup server
     6. All client logins should run in chrooted environments
