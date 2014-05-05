@@ -19,12 +19,15 @@ set -e
 # read/write access and nobody else, results in 700 permissions
 umask 0077
 
+# Set path
+PATH=$PATH:/bin:/usr/bin
+
 # Timestamp, the date/time we started
 start_time=$(date +"%Y-%m-%d-%H-%M-%S")
 
 # Hostname
 hostname="`/bin/hostname`"
-domainname=`/bin/hostname | /bin/sed -n 's/[^.]*\.//p' | /bin/sed -n 's/.$//p' || /bin/dnsdomainname 2> /dev/null`
+domainname=`/bin/hostname | sed -n 's/[^.]*\.//p' | sed -n 's/.$//p' || dnsdomainname 2> /dev/null`
 
 # Constants
 verbosity=1
@@ -53,8 +56,9 @@ blank='\e[0m' # No Color
 # also prints all messages to the syslog daemon for non-attended runs
 function color_echo {
     eval color=\$$1
-    echo -e "${color}${2}${blank}"
-    /usr/bin/logger "rzbackup: ${2}"
+    #echo -e "${color}${2}${blank}"
+    printf "${color}${2}${blank}\n"
+    logger "rzbackup: ${2}"
 }
 
 # Debug method for verbose debugging
@@ -130,7 +134,7 @@ platform="`uname -m`"
 osfamily='Unknown'
 apt-get help > /dev/null 2>&1 && osfamily='Debian'
 yum help help > /dev/null 2>&1 && osfamily='RedHat'
-
+if [ `echo "${OSTYPE}" | grep 'darwin'` ]; then osfamily='Darwin'; fi
 
 # Exit on failure function, takes error message as parameter
 function exit_on_fail {
@@ -192,15 +196,15 @@ finalize_path()
 mount_fuse_filesystem()
 {
     # Create secure temporary directory for mount point
-    tmp_dir="`/bin/mktemp -d`" || exit_on_fail "Unable to create temporary directory"
+    tmp_dir="`mktemp -d`" || exit_on_fail "Unable to create temporary directory"
 
     # Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
     # and remove tmp directory but only if it's empty as it should be if
     # unmounted successfully
-    add_on_sig /bin/fusermount -qu ${tmp_dir}
-    add_on_sig /bin/rmdir ${tmp_dir}
+    add_on_sig usermount -qu ${tmp_dir}
+    add_on_sig rmdir ${tmp_dir}
 
-    /usr/bin/sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} || exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
+    sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} || exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
 }
 
 # Verify zbackup structure exists in remote/target directory
@@ -228,7 +232,7 @@ validate_password_file()
 
 
     # Verify password file permissions are correct and warn if they are not
-    if [ "`/usr/bin/stat -c %a ${password_file}`" != '600' ] ; then
+    if [ "`stat -c %a ${password_file}`" != '600' ] ; then
         color_echo red "Warning, file permissions on ${password_file} are not 600 (-rw-------) as they should be!"
     fi
 }
@@ -236,7 +240,7 @@ validate_password_file()
 function install()
 {
     # Check if we have root permissions or if sudo is available
-    if [ $EUID -ne 0 ]; then
+    if [ $EUID -ne 0 ] && [ "${osfamily}" != "Darwin" ] ; then
             exit_on_fail "This script needs to be run as root or with sudo"
     fi
 
@@ -259,12 +263,24 @@ function install()
             color_echo green "Installing zbackup and sshfs"
             apt-get install zbackup sshfs pwgen pv|| exit_on_fail "Unabel to install the zbackup, sshfs, pv and pwgen packages, please install them manually"
         ;;
+        Darwin)
+            color_echo green "Installing zbackup, sshfs, pwgen and pv"
+            if which -s brew; then
+                brew install zbackup || exit_on_fail
+                brew install pwgen || exit_on_fail
+                brew install pv || exit_on_fail
+                brew install sshfs || exit_on_fail
+            else
+                color_echo red "Unable to locate homebrew/brew command, please install brew and re-run"
+                exit_on_fail
+            fi
+        ;;
         *) color_echo red "Unknown Operating System, can't continue" && exit 1;;
     esac
 
     # Verify password file exists, if not then we create one and tell the user
     if ! [ -f "${password_file}" ] ; then
-        backup_secret="`/usr/bin/pwgen -s -1 32`"
+        backup_secret="`pwgen -s -1 32`"
         color_echo green "No password file found, creating ${password_file}"
         echo "${backup_secret}" > "${password_file}" || "Unable to write password file ${password_file}!"
         color_echo magenta "Created password file with secret: ${backup_secret}"
@@ -294,7 +310,7 @@ function install()
     # Install daily cronjob if there isn't any rzbackup cronjob already
     if ! /usr/bin/crontab -l  | grep ${script_name} > /dev/null; then
         color_echo cyan "Creating a cronjob for rzbackup: ${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup"
-        /bin/cat <(/usr/bin/crontab -l) <(echo "${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup backup") | crontab -
+        cat <(/usr/bin/crontab -l) <(echo "${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup backup") | crontab -
     fi
 
     color_echo green "Successfully installed zbackup"
@@ -311,7 +327,8 @@ function create_repo()
     # Create zbackup structure in remote/target directory
     if ! [ -d "${tmp_dir}/backups" ] && ! [ -d "${tmp_dir}/bundles" ] && ! [ -d "${tmp_dir}/index" ] && ! [ -f "${tmp_dir}/info" ]; then
         color_echo green "creating remote zbackup structure"
-        /usr/bin/zbackup init "${tmp_dir}" --password-file /etc/zbackup.pwd || exit_on_fail "Unable to initialize new zbackup storage"
+        zbackup init "${tmp_dir}" --password-file /etc/zbackup.pwd || exit_on_fail "Unable to initialize new zbackup storage"
+
     else
         color_echo red "zbackup structures found in target directory, will not overwrite, exiting!"
         exit -1
@@ -340,7 +357,7 @@ function backup()
     # Run the backup, be really nice so we don't slow down the system
     # Preserve permissions
     # Handle sparse files like lastlog correctly
-    nice -n 19 /bin/tar cp -S --exclude={'./proc','./sys','./tmp','./dev','./mnt','./media','./selinux'} -C ${source_dir} . | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file} || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
+    nice -n 19 tar cp -S --exclude={'./proc','./sys','./tmp','./dev','./mnt','./media','./selinux'} -C ${source_dir} . | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file} || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
 
     # Timestamp, the date/time we finished
     end_time=$(date +"%Y-%m-%d-%H-%M-%S")
@@ -376,7 +393,7 @@ function restore()
     selected_backup_id=-1
     while [ ${selected_backup_id} -lt 0 ]; do
         color_echo white "Available backups:"
-        /usr/bin/find ${tmp_dir}/backups | /bin/sed 's,'"${tmp_dir}\/backups"'$,none,' | /bin/sed 's,'"${tmp_dir}\/backups\/"',,'| nl -v 0
+        find ${tmp_dir}/backups | sed 's,'"${tmp_dir}\/backups"'$,none,' | sed 's,'"${tmp_dir}\/backups\/"',,'| nl -v 0
         num_avail_backups="`/usr/bin/find ${tmp_dir}/backups | /bin/sed -n '1!p' | /usr/bin/wc -l`"
         read -p "Please choose a backup to restore or 0 to cancel restore:"
         # Make sure reply is a number in range
@@ -384,11 +401,11 @@ function restore()
         if [[ ${REPLY} =~ ${num_regex} ]] && [ ${REPLY} -le ${num_avail_backups} ]; then
             selected_backup_id=${REPLY}
             if [ ${selected_backup_id} -gt 0 ]; then
-                selected_backup="`/usr/bin/find ${tmp_dir}/backups | /bin/grep -v "^${tmp_dir}/backups$" | /bin/sed -n ${selected_backup_id}p`"
+                selected_backup="`find ${tmp_dir}/backups | grep -v "^${tmp_dir}/backups$" | sed -n ${selected_backup_id}p`"
                 color_echo white "Selected to restore backup number: ${selected_backup_id}"
                 # Run the restore
                 color_echo white "Restoring from ${selected_backup} to ${restore_dir}"
-                /usr/bin/zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | /bin/tar -x -C "${restore_dir}"
+                zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | tar -x -C "${restore_dir}"
                 # Timestamp, the date/time we finished
                 end_time=$(date +"%Y-%m-%d-%H-%M")
                 # Log results
@@ -400,7 +417,7 @@ function restore()
     done
 
     # Verify password file permissions are correct and warn if they are not
-    if [ "`/usr/bin/stat -c %a ${password_file}`" != '600' ] ; then
+    if [ "`stat -c %a ${password_file}`" != '600' ] ; then
         color_echo red "Warning, file permissions on ${password_file} are not 600 (-rw-------) as they should be!"
     fi
 }
