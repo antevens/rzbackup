@@ -31,12 +31,24 @@ domainname=`/bin/hostname | sed -n 's/[^.]*\.//p' | sed -n 's/.$//p' || dnsdomai
 
 # Constants
 verbosity=1
-default_password_file='/etc/zbackup.pwd'
-default_source_dir='/'
-default_restore_dir='/'
-default_remote_user=$hostname
-default_remote_host="backup${domainname}"
-default_remote_dir="/home/${hostname}"
+
+#Determine if we are running as root or normal user, changes defaults
+if [ $EUID -ne 0 ] && [ "${osfamily}" != "Darwin" ] ; then
+    default_password_file='/etc/zbackup.pwd'
+    default_source_dir='/'
+    default_restore_dir='/'
+    default_remote_user=$hostname
+    default_remote_host="backup${domainname}"
+    default_remote_dir="/home/${hostname}"
+else
+    default_password_file="$HOME/zbackup.pwd"
+    default_source_dir=$HOME
+    default_restore_dir=$HOME
+    default_remote_user=$USER
+    default_remote_host="backup${domainname}"
+    default_remote_dir="/home/${USER}/${hostname}"
+fi
+
 
 # Color Constants
 black='\e[0;30m'
@@ -282,7 +294,7 @@ function install()
     if ! [ -f "${password_file}" ] ; then
         backup_secret="`pwgen -s -1 32`"
         color_echo green "No password file found, creating ${password_file}"
-        echo "${backup_secret}" > "${password_file}" || "Unable to write password file ${password_file}!"
+        echo "${backup_secret}" | sudo tee "${password_file}" || "Unable to write password file ${password_file}!"
         color_echo magenta "Created password file with secret: ${backup_secret}"
         color_echo magenta "Please store this secret or the file somewhere safe, without it you will not be able to restore any backups"
         color_echo magenta "In addition to storing this secret you should also store the private SSH key (id_rsa/id_dsa) in a safe place if your server does not allow password logins for restore purposes"
@@ -296,9 +308,9 @@ function install()
     # Copy myself (this script) to /usr/bin if nobody with my name is there 
     if ! [ -f "/usr/bin/${script_name}" ] && [ "${script_name}" != 'bash' ]; then
         color_echo cyan "Copying ${script_name} to /usr/bin directory for automated and future runs"
-        /bin/cp "${script_dir}/${script_name}" "/usr/bin/${script_name}"
+        sudo /bin/cp "${script_dir}/${script_name}" "/usr/bin/${script_name}"
         # Allow regular users to run the script
-        chmod go+rx "/usr/bin/${script_name}"
+        sudo chmod go+rx "/usr/bin/${script_name}"
     fi
 
     # Generate random hour/minute for cronjob
@@ -310,7 +322,7 @@ function install()
     # Install daily cronjob if there isn't any rzbackup cronjob already
     if ! /usr/bin/crontab -l  | grep ${script_name} > /dev/null; then
         color_echo cyan "Creating a cronjob for rzbackup: ${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup"
-        cat <(/usr/bin/crontab -l) <(echo "${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup backup") | crontab -
+        cat <(crontab -l) <(echo "${cron_minute} ${cron_hour} * * * /usr/bin/rzbackup backup") | crontab -
     fi
 
     color_echo green "Successfully installed zbackup"
