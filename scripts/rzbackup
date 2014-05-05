@@ -33,7 +33,7 @@ domainname=`/bin/hostname | sed -n 's/[^.]*\.//p' | sed -n 's/.$//p' || dnsdomai
 verbosity=1
 
 #Determine if we are running as root or normal user, changes defaults
-if [ $EUID -ne 0 ] && [ "${osfamily}" != "Darwin" ] ; then
+if [ $EUID -eq 0 ] && [ "${osfamily}" != "Darwin" ] ; then
     default_password_file='/etc/zbackup.pwd'
     default_source_dir='/'
     default_restore_dir='/'
