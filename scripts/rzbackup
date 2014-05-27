@@ -112,7 +112,8 @@ function trim()
 # Safely loads config file and checks for unknown config values
 # First parameter is filename, all consequent parameters are assumed to be
 # valid configuration parameters
-function load_config{
+function load_config()
+{
     config_file=$1
     # Verify config file permissions are correct and warn if they are not
     if [ "`stat -c %a ${config_file}`" != '600' ] ; then
@@ -300,17 +301,18 @@ function create_config_file()
         else
             config_file="$HOME/.rzbackup.conf"
         fi
+        color_echo green "Creating rzbackup config file at ${config_file}"
     else
         config_file="/dev/null"
     fi
 
     # Write coonfiguration options to config file
     echo "password_file='${default_password_file}'" > "${config_file}"
-    echo "source_dir='${default_source_dir}'" > "${config_file}"
-    echo "restore_dir='${default_restore_dir}'" > "${config_file}"
-    echo "remote_user='${default_remote_user}'" > "${config_file}"
-    echo "remote_host='${default_remote_host}'" > "${config_file}"
-    echo "remote_dir='${default_remote_dir}'" > "${config_file}"
+    echo "source_dir='${default_source_dir}'" >> "${config_file}"
+    echo "restore_dir='${default_restore_dir}'" >> "${config_file}"
+    echo "remote_user='${default_remote_user}'" >> "${config_file}"
+    echo "remote_host='${default_remote_host}'" >> "${config_file}"
+    echo "remote_dir='${default_remote_dir}'" >> "${config_file}"
     chmod 600 "${config_file}"
 }
 
@@ -332,14 +334,14 @@ function install()
         ;;
         Debian)
             apt-get update
-            apt-get install python-software-properties
+            apt-get install -y python-software-properties
             if ! apt-cache show zbackup; then
                 color_echo green "Adding ppa:jarl/zbackup apt repository"
                 sudo add-apt-repository ppa:jarl/zbackup || exit_on_fail "Unable to add zbackup apt repository, please add it manually"
                 apt-get update
             fi
             color_echo green "Installing zbackup and sshfs"
-            apt-get install zbackup sshfs pwgen pv|| exit_on_fail "Unabel to install the zbackup, sshfs, pv and pwgen packages, please install them manually"
+            apt-get install -y zbackup sshfs pwgen pv|| exit_on_fail "Unabel to install the zbackup, sshfs, pv and pwgen packages, please install them manually"
         ;;
         Darwin)
             color_echo green "Installing zbackup, sshfs, pwgen and pv"
