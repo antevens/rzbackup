@@ -213,7 +213,7 @@ mount_fuse_filesystem()
     # Set signal handler to automaticaly unmount ssh fuse filesystem on signal/exit
     # and remove tmp directory but only if it's empty as it should be if
     # unmounted successfully
-    add_on_sig usermount -qu ${tmp_dir}
+    add_on_sig fusermount -qu ${tmp_dir}
     add_on_sig rmdir ${tmp_dir}
 
     sshfs ${remote_user}@${remote_host}:${remote_dir} ${tmp_dir} || exit_on_fail "Mounting remote filesystem failed, please verify your SSH settings and confirm you have set up SSH keys, see README for details!"
