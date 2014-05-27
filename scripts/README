@@ -11,7 +11,7 @@ Make sure you copy and store the secret/password somewhere
 safe, in case a restore is needed this secret/password will be required to
 perform a restore, without it your backups are useless.
 
-To peroform a backup install rzbackup and run "rzbackup backup"
+To perform a backup install rzbackup and run "rzbackup backup"
 
 To restore install a bare minimal linux server, install rzbackup and run
 "rzbackup restore".
@@ -42,6 +42,13 @@ this includes but is not limited to:
     5. The backup server should implement quotas so that if a client is
        compromised it can't disrupt the operation of the backup server
     6. All client logins should run in chrooted environments
+
+When running as root or with sudo priviledges rzbackup will first try to
+load settings from /etc/rzbackup.conf, then $HOME/.rzbackup.conf, if no
+settings file is found it will use sane default values.
+
+When running as a normal user rzbackup will try to load settings from
+$HOME/.rzbackup.conf but defaults to sane values if the file is not found
 
 And last but not least, always test restoring backups, a backup that has not
 been restored is no backup at all!

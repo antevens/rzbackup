@@ -81,7 +81,7 @@ function debug {
 }
 
 # Function to print the help message
-print_usage()
+function print_usage()
 {
 cat << EOF
 usage: $0 options
@@ -99,6 +99,41 @@ OPTIONS:
    -v    Verbose debug logging
 EOF
 }
+
+# Trim whitespaces from strings
+function trim()
+{
+    local var=$1;
+    var="${var#"${var%%[![:space:]]*}"}";   # remove leading whitespace characters
+    var="${var%"${var##*[![:space:]]}"}";   # remove trailing whitespace characters
+    echo -n "$var";
+}
+
+# Safely loads config file and checks for unknown config values
+# First parameter is filename, all consequent parameters are assumed to be
+# valid configuration parameters
+function load_config{
+    config_file=$1
+    # Verify config file permissions are correct and warn if they are not
+    if [ "`stat -c %a ${config_file}`" != '600' ] ; then
+        color_echo red "Warning, file permissions on ${config_file} are not 600 (-rw-------) as they should be!"
+    fi
+    shift
+    while read line; do
+        if [[ "$line" =~ ^[^#]*= ]]; then
+            setting_name=$(trim "${line%%=*}");
+            setting_value=$(trim "${line#*=}");
+
+            if [ echo $@ | grep -q ${setting_name} ]; then
+                eval ${setting_name}=\$${setting_value}
+            else
+                color_echo red "Unrecognised setting: ${setting_name}";
+                exit 1
+            fi
+        fi
+    done < "${config_file}";
+}
+
 
 # Parse command line arguments
 while getopts ":vh" opt; do
@@ -147,6 +182,14 @@ osfamily='Unknown'
 apt-get help > /dev/null 2>&1 && osfamily='Debian'
 yum help help > /dev/null 2>&1 && osfamily='RedHat'
 if [ `echo "${OSTYPE}" | grep 'darwin'` ]; then osfamily='Darwin'; fi
+
+# Figure out if we should load a settings file
+valid_config_settings="password_file source_dir restore_dir remote_user remote_host remote_dir"
+if [ $EUID -eq 0 ] && [ -f '/etc/rzbackup.conf' ] ; then
+    load_config '/etc/rzbackup.conf' ${valid_config_settings}
+elif [ -f "$HOME/.rzbackup.conf" ]; then
+    load_config "$HOME/.rzbackup.conf" ${valid_config_settings}
+fi
 
 # Exit on failure function, takes error message as parameter
 function exit_on_fail {
@@ -242,12 +285,35 @@ validate_password_file()
         exit_on_fail "Password file exists but is not readable by current user, please run as a user with permissions to read ${password_file} or grant current user permissions"
     fi
 
-
     # Verify password file permissions are correct and warn if they are not
     if [ "`stat -c %a ${password_file}`" != '600' ] ; then
         color_echo red "Warning, file permissions on ${password_file} are not 600 (-rw-------) as they should be!"
     fi
 }
+
+# Create config file
+function create_config_file()
+{
+    if ! [ -f '/etc/rzbackup.conf' ] && ! [ -f "$HOME/.rzbackup.conf" ]; then
+        if [ $EUID -eq 0 ]; then
+            config_file='/etc/rzbackup.conf'
+        else
+            config_file="$HOME/.rzbackup.conf"
+        fi
+    else
+        config_file="/dev/null"
+    fi
+
+    # Write coonfiguration options to config file
+    echo "password_file='${default_password_file}'" > "${config_file}"
+    echo "source_dir='${default_source_dir}'" > "${config_file}"
+    echo "restore_dir='${default_restore_dir}'" > "${config_file}"
+    echo "remote_user='${default_remote_user}'" > "${config_file}"
+    echo "remote_host='${default_remote_host}'" > "${config_file}"
+    echo "remote_dir='${default_remote_dir}'" > "${config_file}"
+    chmod 600 "${config_file}"
+}
+
 
 function install()
 {
@@ -299,6 +365,9 @@ function install()
         color_echo magenta "Please store this secret or the file somewhere safe, without it you will not be able to restore any backups"
         color_echo magenta "In addition to storing this secret you should also store the private SSH key (id_rsa/id_dsa) in a safe place if your server does not allow password logins for restore purposes"
     fi
+
+    # Create a config file if one is not found
+    create_config_file
 
     # Figure out which directory this script is being run from and store as full path
     script_dir="`pwd`"
