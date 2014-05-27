@@ -125,8 +125,9 @@ function load_config()
             setting_name=$(trim "${line%%=*}");
             setting_value=$(trim "${line#*=}");
 
-            if [ echo $@ | grep -q ${setting_name} ]; then
+            if echo $@ | grep -q ${setting_name} ; then
                 eval ${setting_name}=\$${setting_value}
+                debug 10 "Loaded config parameter  ${setting_name} with value of ${setting_value}"
             else
                 color_echo red "Unrecognised setting: ${setting_name}";
                 exit 1
@@ -302,18 +303,18 @@ function create_config_file()
             config_file="$HOME/.rzbackup.conf"
         fi
         color_echo green "Creating rzbackup config file at ${config_file}"
-    else
-        config_file="/dev/null"
-    fi
+        # Write coonfiguration options to config file
+        echo "password_file='${default_password_file}'" > "${config_file}"
+        echo "source_dir='${default_source_dir}'" >> "${config_file}"
+        echo "restore_dir='${default_restore_dir}'" >> "${config_file}"
+        echo "remote_user='${default_remote_user}'" >> "${config_file}"
+        echo "remote_host='${default_remote_host}'" >> "${config_file}"
+        echo "remote_dir='${default_remote_dir}'" >> "${config_file}"
+        chmod 600 "${config_file}"
 
-    # Write coonfiguration options to config file
-    echo "password_file='${default_password_file}'" > "${config_file}"
-    echo "source_dir='${default_source_dir}'" >> "${config_file}"
-    echo "restore_dir='${default_restore_dir}'" >> "${config_file}"
-    echo "remote_user='${default_remote_user}'" >> "${config_file}"
-    echo "remote_host='${default_remote_host}'" >> "${config_file}"
-    echo "remote_dir='${default_remote_dir}'" >> "${config_file}"
-    chmod 600 "${config_file}"
+    else
+        color_echo cyan "Found existing config file, skipping config file creation"
+    fi
 }
 
 
