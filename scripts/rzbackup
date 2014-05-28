@@ -27,7 +27,7 @@ start_time=$(date +"%Y-%m-%d-%H-%M-%S")
 
 # Hostname
 hostname="`/bin/hostname`"
-domainname=`/bin/hostname | sed -n 's/[^.]*\.//p' | sed -n 's/.$//p' || dnsdomainname 2> /dev/null`
+domainname=`/bin/hostname | sed -n 's/[^.]*\.//p' || dnsdomainname 2> /dev/null`
 
 # Constants
 verbosity=1
@@ -38,14 +38,14 @@ if [ $EUID -eq 0 ] && [ "${osfamily}" != "Darwin" ] ; then
     default_source_dir='/'
     default_restore_dir='/'
     default_remote_user=$hostname
-    default_remote_host="backup${domainname}"
+    default_remote_host="backup.${domainname}"
     default_remote_dir="/home/${hostname}"
 else
     default_password_file="$HOME/zbackup.pwd"
     default_source_dir=$HOME
     default_restore_dir=$HOME
     default_remote_user=$USER
-    default_remote_host="backup${domainname}"
+    default_remote_host="backup.${domainname}"
     default_remote_dir="/home/${USER}/${hostname}"
 fi
 
