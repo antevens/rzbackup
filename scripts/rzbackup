@@ -116,7 +116,8 @@ function load_config()
 {
     config_file=$1
     # Verify config file permissions are correct and warn if they are not
-    if [ "`stat -c %a ${config_file}`" != '600' ] ; then
+    # Dual stat commands to work with both linux and bsd
+    if [ "`stat -c %a ${config_file} 2> /dev/null || stat -f %p /Users/astevens/.rzbackup.conf | tail -c 4`" != '600' ] ; then
         color_echo red "Warning, file permissions on ${config_file} are not 600 (-rw-------) as they should be!"
     fi
     shift
@@ -240,7 +241,8 @@ finalize_path()
 {
         eval path=\$$1
         if [ "${path}" != "" ]; then
-            full_path="`readlink -m ${path}`"
+            gnu_readlink=`which greadlink || which readlink`
+            full_path="`${gnu_readlink} -m ${path}`"
             debug 10 "Determining full path with directory: '${full_path}' and path: '${path}'"
             if [ "${full_path}" != "" ]; then
                     eval $1=${full_path}
@@ -345,12 +347,13 @@ function install()
             apt-get install -y zbackup sshfs pwgen pv|| exit_on_fail "Unabel to install the zbackup, sshfs, pv and pwgen packages, please install them manually"
         ;;
         Darwin)
-            color_echo green "Installing zbackup, sshfs, pwgen and pv"
+            color_echo green "Installing zbackup, sshfs, pwgen, coreutils and pv"
             if which -s brew; then
                 brew install zbackup || exit_on_fail
                 brew install pwgen || exit_on_fail
                 brew install pv || exit_on_fail
                 brew install sshfs || exit_on_fail
+                brew install coreutils || exit_on_fail
             else
                 color_echo red "Unable to locate homebrew/brew command, please install brew and re-run"
                 exit_on_fail
