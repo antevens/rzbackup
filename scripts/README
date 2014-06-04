@@ -6,6 +6,11 @@ To install zbackup/rzbackup from a local copy run "rzbackup install".
 To install directly from github run:
 bash -c "source <(wget -qO - https://raw.github.com/jalli/rzbackup/master/scripts/rzbackup) install"
 
+Note that if this fails silently it's probably because the new TLS cerf for github is not signed by a trusted CA,
+you can bypass the check by running:
+bash -c "source <(wget -qO - https://raw.github.com/jalli/rzbackup/master/scripts/rzbackup --no-check-certificate) install"
+ 
+
 To create a new backup repository on a remote host run "rzbackup create_repo"
 Make sure you copy and store the secret/password somewhere
 safe, in case a restore is needed this secret/password will be required to
