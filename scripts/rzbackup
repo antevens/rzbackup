@@ -444,7 +444,7 @@ function backup()
     # Run the backup, be really nice so we don't slow down the system
     # Preserve permissions
     # Handle sparse files like lastlog correctly
-    nice -n 19 tar cp -S --exclude=/proc --exclude=/sys --exclude=/tmp --exclude=/dev --exclude=/mnt --exclude=/media --exclude=/selinux --exclude=/run --exclude=lost+found --exclude=volume.tc -C ${source_dir} . | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file} || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
+    nice -n 19 tar cp -S --exclude=/proc --exclude=/sys --exclude=/tmp --exclude=/dev --exclude=/mnt --exclude=/media --exclude=/selinux --exclude=/run --exclude=lost+found --exclude=*.tc --exclude-backups -C ${source_dir} . | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file} || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
 
     # Timestamp, the date/time we finished
     end_time=$(date +"%Y-%m-%d-%H-%M-%S")
