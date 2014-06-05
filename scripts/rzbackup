@@ -1,5 +1,5 @@
 #!/bin/bash -e
-set -e
+#set -e
 
 #License: GPL-2.0
 # This program is free software: you can redistribute it and/or modify
@@ -35,6 +35,7 @@ verbosity=1
 #Determine if we are running as root or normal user, changes defaults
 if [ $EUID -eq 0 ] && [ "${osfamily}" != "Darwin" ] ; then
     default_password_file='/etc/zbackup.pwd'
+    default_exclusion_file='/etc/rzbackup.exclude'
     default_source_dir='/'
     default_restore_dir='/'
     default_remote_user=$hostname
@@ -42,6 +43,7 @@ if [ $EUID -eq 0 ] && [ "${osfamily}" != "Darwin" ] ; then
     default_remote_dir="/home/${hostname}"
 else
     default_password_file="$HOME/zbackup.pwd"
+    default_exclusion_file="$HOME/rzbackup.exclude"
     default_source_dir=$HOME
     default_restore_dir=$HOME
     default_remote_user=$USER
@@ -172,6 +174,7 @@ done
 
 # Variables
 password_file=$default_password_file
+exclusion_file=$default_exclusion_file
 source_dir=$default_source_dir
 restore_dir=$default_restore_dir
 remote_user=$default_remote_user
@@ -366,10 +369,18 @@ function install()
     if ! [ -f "${password_file}" ] ; then
         backup_secret="`pwgen -s -1 32`"
         color_echo green "No password file found, creating ${password_file}"
-        echo "${backup_secret}" | tee "${password_file}" || "Unable to write password file ${password_file}!"
+        echo "${backup_secret}" | tee "${password_file}" > /dev/null || "Unable to write password file ${password_file}!"
         color_echo magenta "Created password file with secret: ${backup_secret}"
         color_echo magenta "Please store this secret or the file somewhere safe, without it you will not be able to restore any backups"
         color_echo magenta "In addition to storing this secret you should also store the private SSH key (id_rsa/id_dsa) in a safe place if your server does not allow password logins for restore purposes"
+    fi
+
+    # Verify exclusion pattern file exists, if not then we create one and tell the user
+    if ! [ -f "${exclusion_file}" ] ; then
+        default_exclusion_patterns=(./proc ./sys ./tmp ./dev ./mnt ./media ./selinux ./srv ./run *lost+found* ./run ./var/cache)
+        color_echo green "No exclusion file found, creating ${exclusion_file}"
+        for i in ${default_exclusion_patterns[*]}; do echo $i >> "${exclusion_file}"; done
+        color_echo magenta "Created exclution file with exclusions: ${default_exclusion_patterns}"
     fi
 
     # Create a config file if one is not found
@@ -444,7 +455,7 @@ function backup()
     # Run the backup, be really nice so we don't slow down the system
     # Preserve permissions
     # Handle sparse files like lastlog correctly
-    nice -n 19 tar cp -S --exclude=/proc --exclude=/sys --exclude=/tmp --exclude=/dev --exclude=/mnt --exclude=/media --exclude=/selinux --exclude=/run --exclude=lost+found --exclude=*.tc --exclude-backups -C ${source_dir} . | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file} || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
+    nice -n 19 tar cp -S --exclude-from ${exclusion_file}  -C ${source_dir} . | pv -ptrb | /usr/bin/zbackup backup ${tmp_dir}/backups/${hostname}-${start_time} --password-file ${password_file} || exit_on_fail "Unable to back up ${source_dir} to ${remote_user}@${remote_host}:${remote_dir} using password from ${password_file}"
 
     # Timestamp, the date/time we finished
     end_time=$(date +"%Y-%m-%d-%H-%M-%S")
@@ -492,7 +503,8 @@ function restore()
                 color_echo white "Selected to restore backup number: ${selected_backup_id}"
                 # Run the restore
                 color_echo white "Restoring from ${selected_backup} to ${restore_dir}"
-                zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | tar -x -C "${restore_dir}"
+                zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | tar -x --transform 's,/etc/grub,/etc/grub-restored,' --transform 's,/etc/fstab,/etc/fstab-restored,' --overwrite -C "${restore_dir}"
+                color_echo cyan "Note that any fstab or grub configs will be not be overwritten, they will be renamed as grud-restored and fstab-restored, please manually edit these as required"
                 # Timestamp, the date/time we finished
                 end_time=$(date +"%Y-%m-%d-%H-%M")
                 # Log results
