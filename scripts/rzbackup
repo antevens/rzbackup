@@ -487,6 +487,9 @@ function fix_grub()
     sudo sed -i "s/$old_root_uuid/$new_root_uuid/g" /boot/grub/grub.cfg
     sudo sed -i "s,root=/dev/mapper/[0-1a-zA-Z_-]*,root=$root_device,g" /boot/grub/grub.cfg
     sudo sed -i "s,root='(.*)',root='(${root_name})',g" /boot/grub/grub.cfg
+
+    sudo update-grub
+    sudo grub-install /dev/sda
 }
 
 function restore()
@@ -528,7 +531,13 @@ function restore()
                 color_echo white "Selected to restore backup number: ${selected_backup_id}"
                 # Run the restore
                 color_echo white "Restoring from ${selected_backup} to ${restore_dir}"
-                zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | tar -x --transform 's,/etc/grub,/etc/grub-restored,' --transform 's,/etc/fstab,/etc/fstab-restored,' --transform 's,/boot/grub,/boot/grub-restored,' --transform 's,/etc/mtab,/etc/mtab-restored,' --overwrite -C "${restore_dir}" || color_echo red 'Tar encountered some errors while restoring'
+                zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | tar -x --transform 's,/lib,/lib-restored,' --transform 's,/etc/grub,/etc/grub-restored,' --transform 's,/etc/fstab,/etc/fstab-restored,' --transform 's,/boot/grub,/boot/grub-restored,' --transform 's,/etc/mtab,/etc/mtab-restored,' --overwrite -C "${restore_dir}" || color_echo red 'Tar encountered some errors while restoring'
+                # System does not like when we overwrite libraries in use so we
+                # use rsync to properly handle existing files
+                color_echo white "Scanning for /lib directory and attempting to sync"
+                if ! [ -d /lib-restored ] ; then
+                    rsync -a /lib-restored /lib && rm -Rf /lib-restored
+                fi
                 color_echo cyan "Note that any fstab or grub configs will be not be overwritten, they will be renamed as grud-restored and fstab-restored, please manually edit these as required"
                 # Timestamp, the date/time we finished
                 end_time=$(date +"%Y-%m-%d-%H-%M")
@@ -568,8 +577,8 @@ for argument in ${arguments}; do
                 restore
                 exit 0
         ;;
-        fix-grub)
-                fix-grub
+        fix_grub)
+                fix_grub
                 exit 0
         ;;
         -*)
