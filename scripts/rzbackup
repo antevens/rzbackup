@@ -95,6 +95,7 @@ ARGUMENTS:
     create_repo    Creates a zbackup repository on the remote host via SSH
     backup         Backs up a directory or file to a remote host via SSH
     restore        Restores a backup from a remote host via SSH
+    fix-grub       EXPERIMENTAL! Attempts to fix grub2 boot records and settings
 
 OPTIONS:
    -h    Show this message
@@ -132,7 +133,7 @@ function load_config()
                 eval ${setting_name}=\$${setting_value}
                 debug 10 "Loaded config parameter  ${setting_name} with value of ${setting_value}"
             else
-                color_echo red "Unrecognised setting: ${setting_name}";
+                color_echo red "Unrecognised setting: ${setting_name} in ${config_file}";
                 exit 1
             fi
         fi
@@ -380,7 +381,7 @@ function install()
         default_exclusion_patterns=(./proc ./sys ./tmp ./dev ./mnt ./media ./selinux ./srv ./run *lost+found* ./run ./var/cache)
         color_echo green "No exclusion file found, creating ${exclusion_file}"
         for i in ${default_exclusion_patterns[*]}; do echo $i >> "${exclusion_file}"; done
-        color_echo magenta "Created exclution file with exclusions: ${default_exclusion_patterns}"
+        color_echo magenta "Created exclution file with exclusions: ${default_exclusion_patterns[*]}"
     fi
 
     # Create a config file if one is not found
@@ -464,6 +465,30 @@ function backup()
     color_echo green "Backup completed successfully at ${end_time}"
 }
 
+function fix_grub()
+{
+    root_device="`mount | grep 'on / ' | awk '{print $1}'`"
+    boot_device="`mount | grep 'on /boot ' | awk '{print $1}'`"
+
+    eval `sudo blkid | grep ${root_device} | awk '{print $2}'`
+    new_root_uuid=$UUID
+    eval `sudo blkid | grep ${boot_device} | awk '{print $2}'`
+    new_boot_uuid=$UUID
+
+    sudo mv /boot/grub /boot/grub-original
+    sudo mv /boot/grub-restored /boot/grub
+
+    old_boot_uuid="`grep "search --no-floppy --fs-uuid --set" /boot/grub/grub.cfg | sed -n 2p | awk '{print $5}'`"
+    old_root_uuid="`grep "search --no-floppy --fs-uuid --set" /boot/grub/grub.cfg | sed -n 1p | awk '{print $5}'`"
+
+    root_name="`echo $root_device | awk -F/ '{print $4}'`"
+
+    sudo sed -i "s/$old_boot_uuid/$new_boot_uuid/g" /boot/grub/grub.cfg
+    sudo sed -i "s/$old_root_uuid/$new_root_uuid/g" /boot/grub/grub.cfg
+    sudo sed -i "s,root=/dev/mapper/[0-1a-zA-Z_-]*,root=$root_device,g" /boot/grub/grub.cfg
+    sudo sed -i "s,root='(.*)',root='(${root_name})',g" /boot/grub/grub.cfg
+}
+
 function restore()
 {
     # Verify password file exists, if not then we ask the user
@@ -503,7 +528,7 @@ function restore()
                 color_echo white "Selected to restore backup number: ${selected_backup_id}"
                 # Run the restore
                 color_echo white "Restoring from ${selected_backup} to ${restore_dir}"
-                zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | tar -x --transform 's,/etc/grub,/etc/grub-restored,' --transform 's,/etc/fstab,/etc/fstab-restored,' --overwrite -C "${restore_dir}"
+                zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | tar -x --transform 's,/etc/grub,/etc/grub-restored,' --transform 's,/etc/fstab,/etc/fstab-restored,' --transform 's,/boot/grub,/boot/grub-restored,' --transform 's,/etc/mtab,/etc/mtab-restored,' --overwrite -C "${restore_dir}" || color_echo red 'Tar encountered some errors while restoring'
                 color_echo cyan "Note that any fstab or grub configs will be not be overwritten, they will be renamed as grud-restored and fstab-restored, please manually edit these as required"
                 # Timestamp, the date/time we finished
                 end_time=$(date +"%Y-%m-%d-%H-%M")
@@ -541,6 +566,10 @@ for argument in ${arguments}; do
         ;;
         restore)
                 restore
+                exit 0
+        ;;
+        fix-grub)
+                fix-grub
                 exit 0
         ;;
         -*)
