@@ -95,7 +95,7 @@ ARGUMENTS:
     create_repo    Creates a zbackup repository on the remote host via SSH
     backup         Backs up a directory or file to a remote host via SSH
     restore        Restores a backup from a remote host via SSH
-    fix-grub       EXPERIMENTAL! Attempts to fix grub2 boot records and settings
+    fix_grub       EXPERIMENTAL! Attempts to fix grub2 boot records and settings
 
 OPTIONS:
    -h    Show this message
@@ -538,7 +538,7 @@ function restore()
                 if ! [ -d /lib-restored ] ; then
                     rsync -a /lib-restored /lib && rm -Rf /lib-restored
                 fi
-                color_echo cyan "Note that any fstab or grub configs will be not be overwritten, they will be renamed as grud-restored and fstab-restored, please manually edit these as required"
+                color_echo cyan "Note that any fstab or grub configs will be not be overwritten, they will be renamed as grub-restored and fstab-restored, please manually edit these as required"
                 # Timestamp, the date/time we finished
                 end_time=$(date +"%Y-%m-%d-%H-%M")
                 # Log results
