@@ -1,6 +1,6 @@
 Summary:        A globally-deduplicating backup tool
 Name:           zbackup
-Version:        1.2.2
+Version:        1.2.4
 Release:        1
 License:        GPL v2+
 Group:          Applications/Archiving
@@ -51,9 +51,11 @@ rm -rf %{buildroot}
 %{_bindir}/rzbackup install || :
 
 %changelog
+* Wed Jun 11 2014 Jarl Stefansson <jarl.stefansson@gmail.com> 1.2.4-1
+-  Test
+
 * Wed Jun 11 2014 Jarl Stefansson <jarl.stefansson@gmail.com> 1.2.2-1
 - new package built with tito
-
 * Wed Jun 11 2014 Jarl Stefansson <jarl.stefansson@gmail.com>
 - adopted for rzbackup
 * Mon Apr 28 2014 Dmitriy Slupytskyi <dslupytskyi@gmail.com>
