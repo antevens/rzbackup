@@ -335,7 +335,9 @@ function install()
     color_echo cyan "Detected OS based on: ${osfamily}"
     case "${osfamily}" in
         RedHat)
-            wget -qO - "http://dl.fedoraproject.org/pub/epel/6/${platform}/epel-release-6-8.noarch.rpm" | sudo rpm -Uhv - || exit_on_fail "Unable to add the EPEL repository to YUM, please add it manually"
+            if ! rpm -q epel-release > /dev/null; then
+                wget -qO - "http://dl.fedoraproject.org/pub/epel/6/${platform}/epel-release-6-8.noarch.rpm" | sudo rpm -Uhv - || exit_on_fail "Unable to add the EPEL repository to YUM, please add it manually"
+             fi
             # Could use a repo to fall back to for getting the package
             yum --enablerepo=epel -y install fuse-sshfs zbackup pwgen pv || exit_on_fail "Unable to install requried packages fuse-sshfs, pv, zbackup and pwgen, please install them manually"
         ;;
@@ -531,7 +533,7 @@ function restore()
                 color_echo white "Selected to restore backup number: ${selected_backup_id}"
                 # Run the restore
                 color_echo white "Restoring from ${selected_backup} to ${restore_dir}"
-                zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | tar -x --transform 's,/lib,/lib-restored,' --transform 's,/etc/grub,/etc/grub-restored,' --transform 's,/etc/fstab,/etc/fstab-restored,' --transform 's,/boot/grub,/boot/grub-restored,' --transform 's,/etc/mtab,/etc/mtab-restored,' --overwrite -C "${restore_dir}" || color_echo red 'Tar encountered some errors while restoring'
+                zbackup restore --password-file "${password_file}" "${selected_backup}" | pv -ptrb | tar -x --transform 's,^./lib,./lib-restored,' --transform 's,^./etc/grub,./etc/grub-restored,' --transform 's,^./etc/fstab,./etc/fstab-restored,' --transform 's,^./boot/grub,./boot/grub-restored,' --transform 's,^./etc/mtab,./etc/mtab-restored,' --overwrite -C "${restore_dir}" || color_echo red 'Tar encountered some errors while restoring'
                 # System does not like when we overwrite libraries in use so we
                 # use rsync to properly handle existing files
                 color_echo white "Scanning for /lib directory and attempting to sync"
