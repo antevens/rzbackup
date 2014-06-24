@@ -16,6 +16,9 @@ Requires:       openssl
 Requires:       protobuf
 Requires:       zlib
 Requires:       xz
+Requires:       fuse-sshfs
+Requires:       pwgen
+Requires:       pv
 
 %description
 zbackup is a globally-deduplicating backup tool, based on the ideas

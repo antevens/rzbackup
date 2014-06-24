@@ -508,7 +508,7 @@ function restore()
 
     # Verify zbackup and sshfs are installed, if not we run install
     if ! [ -f '/usr/bin/sshfs' ] && [ -f '/usr/bin/zbackup' ]; then
-        `/bin/pwd`/rzinstall
+        `/bin/pwd`/rzbackup install
     fi
 
     # Mount fuse sshfs filesystem
