@@ -10,6 +10,8 @@ Note that if this fails silently it's probably because the new TLS cerf for gith
 you can bypass the check by running:
 bash -c "source <(wget -qO - https://raw.github.com/jalli/rzbackup/master/scripts/rzbackup --no-check-certificate) install"
  
+The next step is to configure your settings for the remote server and users by editing /etc/rzbackup.conf, adjust these for your environment.
+
 
 To create a new backup repository on a remote host run "rzbackup create_repo"
 Make sure you copy and store the secret/password somewhere
