@@ -537,8 +537,8 @@ function restore()
                 # System does not like when we overwrite libraries in use so we
                 # use rsync to properly handle existing files
                 color_echo white "Scanning for /lib directory and attempting to sync"
-                if ! [ -d /lib-restored ] ; then
-                    rsync -a /lib-restored /lib && rm -Rf /lib-restored
+                if [ -d /lib-restored ] ; then
+                    rsync -a /lib-restored/* /lib && rm -Rf /lib-restored
                 fi
                 color_echo cyan "Note that any fstab or grub configs will be not be overwritten, they will be renamed as grub-restored and fstab-restored, please manually edit these as required"
                 # Timestamp, the date/time we finished
