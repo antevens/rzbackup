@@ -5,8 +5,8 @@ Release:        1
 License:        GPL v2+
 Group:          Applications/Archiving
 URL:            http://zbackup.org/
-Source0:        https://github.com/jalli/zbackup/archive/%{version}.tar.gz
-BuildRequires:  cmake >= 2.8.2
+Source0:        https://github.com/jalli/rzbackup/raw/master/archive/%{name}-%{version}.tar.gz
+BuildRequires:  cmake >= 2.6.2
 BuildRequires:  openssl-devel
 BuildRequires:  protobuf-devel
 BuildRequires:  zlib-devel
@@ -33,12 +33,14 @@ required is very low.
 %setup -q
 
 %build
-cmake .
+cmake . -DCMAKE_INSTALL_PREFIX=/usr
 make %{?_smp_mflags}
 
 %install
-make install DESTDIR=%{buildroot}
-install -m 755 scripts/r%{name} ${RPM_BUILD_ROOT}%{_bindir}
+rm -rf %{buildroot}
+make install DESTDIR=%{buildroot} BINDIR=%{_bindir}
+mkdir -p %{buildroot}%{_bindir}
+install -m 755 scripts/r%{name} %{buildroot}%{_bindir}/r%{name}
 
 %clean
 rm -rf %{buildroot}
@@ -47,18 +49,13 @@ rm -rf %{buildroot}
 %defattr(644,root,root,755)
 %attr(755,root,root) %{_bindir}/%{name}
 %attr(755,root,root) %{_bindir}/rzbackup
-%config(noreplace) %{_sysconfdir}/rzbackup.conf
-%config(noreplace) %{_sysconfdir}/zbackup.pwd
+#%config(noreplace) %{_sysconfdir}/rzbackup.conf
+#%config(noreplace) %{_sysconfdir}/zbackup.pwd
 
 %post 
 %{_bindir}/rzbackup install || :
 
 %changelog
-* Wed Jun 11 2014 Jarl Stefansson <jarl.stefansson@gmail.com> 1.2.4-1
--  Test
-
-* Wed Jun 11 2014 Jarl Stefansson <jarl.stefansson@gmail.com> 1.2.2-1
-- new package built with tito
 * Wed Jun 11 2014 Jarl Stefansson <jarl.stefansson@gmail.com>
 - adopted for rzbackup
 * Mon Apr 28 2014 Dmitriy Slupytskyi <dslupytskyi@gmail.com>
