@@ -1,5 +1,5 @@
-// Copyright (c) 2012-2013 Konstantin Isakov <ikm@zbackup.org>
-// Part of ZBackup. Licensed under GNU GPLv2 or later
+// Copyright (c) 2012-2014 Konstantin Isakov <ikm@zbackup.org>
+// Part of ZBackup. Licensed under GNU GPLv2 or later + OpenSSL, see LICENSE
 
 #ifndef CHUNK_INDEX_HH_INCLUDED__
 #define CHUNK_INDEX_HH_INCLUDED__
@@ -77,7 +77,7 @@ public:
   DEF_EX( Ex, "Chunk index exception", std::exception )
   DEF_EX( exIncorrectChunkIdSize, "Incorrect chunk id size encountered", Ex )
 
-  ChunkIndex( EncryptionKey const &, TmpMgr &, string const & indexPath );
+  ChunkIndex( EncryptionKey const &, TmpMgr &, string const & indexPath, bool prohibitChunkIndexLoading );
 
   struct ChunkInfoInterface
   {

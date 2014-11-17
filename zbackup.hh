@@ -1,5 +1,5 @@
-// Copyright (c) 2012-2013 Konstantin Isakov <ikm@zbackup.org>
-// Part of ZBackup. Licensed under GNU GPLv2 or later
+// Copyright (c) 2012-2014 Konstantin Isakov <ikm@zbackup.org>
+// Part of ZBackup. Licensed under GNU GPLv2 or later + OpenSSL, see LICENSE
 
 #ifndef ZBACKUP_HH_INCLUDED__
 #define ZBACKUP_HH_INCLUDED__
@@ -8,6 +8,7 @@
 #include <exception>
 #include <string>
 #include <vector>
+#include <bitset>
 
 #include "chunk_id.hh"
 #include "chunk_index.hh"
@@ -16,9 +17,11 @@
 #include "ex.hh"
 #include "tmp_mgr.hh"
 #include "zbackup.pb.h"
+#include "backup_exchanger.hh"
 
 using std::string;
 using std::vector;
+using std::bitset;
 
 struct Paths
 {
@@ -35,7 +38,7 @@ struct Paths
   string getBackupsPath();
 };
 
-class ZBackupBase: protected Paths
+class ZBackupBase: public Paths
 {
 public:
   DEF_EX( Ex, "ZBackup exception", std::exception )
@@ -51,6 +54,7 @@ public:
 
   /// Opens the storage
   ZBackupBase( string const & storageDir, string const & password );
+  ZBackupBase( string const & storageDir, string const & password, bool prohibitChunkIndexLoading );
 
   /// Creates new storage
   static void initStorage( string const & storageDir, string const & password,
@@ -58,13 +62,13 @@ public:
 
   /// For a given file within the backups/ dir in the storage, returns its
   /// storage dir or throws an exception
-  static string deriveStorageDirFromBackupsFile( string const & backupsFile );
+  static string deriveStorageDirFromBackupsFile( string const & backupsFile, bool allowOutside = false );
 
-protected:
   StorageInfo storageInfo;
   EncryptionKey encryptionkey;
   TmpMgr tmpMgr;
   ChunkIndex chunkIndex;
+protected:
 
 private:
   StorageInfo loadStorageInfo();
@@ -92,6 +96,21 @@ public:
 
   /// Restores the data to stdin
   void restoreToStdin( string const & inputFileName );
+};
+
+class ZExchange
+{
+  ZBackupBase srcZBackupBase;
+  ZBackupBase dstZBackupBase;
+
+public:
+  ZExchange( string const & srcStorageDir, string const & srcPassword,
+            string const & dstStorageDir, string const & dstPassword,
+            bool prohibitChunkIndexLoading );
+
+  /// Exchanges the data between storages
+  void exchange( string const & srcFileName, string const & dstFileName,
+      bitset< BackupExchanger::Flags > const & exchange );
 };
 
 #endif

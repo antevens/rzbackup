@@ -1,6 +1,6 @@
 Summary:        A globally-deduplicating backup tool
 Name:           zbackup
-Version:        1.2.4
+Version:        1.2.5
 Release:        1
 License:        GPL v2+
 Group:          Applications/Archiving

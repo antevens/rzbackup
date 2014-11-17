@@ -1,5 +1,5 @@
-// Copyright (c) 2012-2013 Konstantin Isakov <ikm@zbackup.org>
-// Part of ZBackup. Licensed under GNU GPLv2 or later
+// Copyright (c) 2012-2014 Konstantin Isakov <ikm@zbackup.org>
+// Part of ZBackup. Licensed under GNU GPLv2 or later + OpenSSL, see LICENSE
 
 #include <stdio.h>
 #include <string.h>
@@ -66,11 +66,12 @@ void ChunkIndex::loadIndex()
 }
 
 ChunkIndex::ChunkIndex( EncryptionKey const & key, TmpMgr & tmpMgr,
-                        string const & indexPath ):
+                        string const & indexPath, bool prohibitChunkIndexLoading ):
   key( key ), tmpMgr( tmpMgr ), indexPath( indexPath ), storage( 65536, 1 ),
   lastBundleId( NULL )
 {
-  loadIndex();
+  if ( !prohibitChunkIndexLoading )
+    loadIndex();
 }
 
 Bundle::Id const * ChunkIndex::findChunk( ChunkId::RollingHashPart rollingHash,
