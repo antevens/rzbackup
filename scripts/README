@@ -4,12 +4,12 @@ SSH filesystems using FUSE sshfs and zbackup.
 To install zbackup/rzbackup from a local copy run "rzbackup install".
 
 To install directly from github run:
-bash -c "source <(wget -qO - https://raw.github.com/jalli/rzbackup/master/scripts/rzbackup) install"
+bash -c "source <(wget -qO - https://raw.github.com/antevens/rzbackup/master/scripts/rzbackup) install"
 
 Note that if this fails silently it's probably because the new TLS cerf for github is not signed by a trusted CA,
 you can bypass the check by running:
-bash -c "source <(wget -qO - https://raw.github.com/jalli/rzbackup/master/scripts/rzbackup --no-check-certificate) install"
- 
+bash -c "source <(wget -qO - https://raw.github.com/antevens/rzbackup/master/scripts/rzbackup --no-check-certificate) install"
+
 The next step is to configure your settings for the remote server and users by editing /etc/rzbackup.conf or $HOME/rzbackup.conf, adjust these for your environment.
 
 To create a new backup repository on a remote host run "rzbackup create_repo"

@@ -590,6 +590,7 @@ int main( int argc, char *argv[] )
 "         --convergent-encryption (crypt each file with hash of itself)\n"
 "             allows deduplication across multiple servers\n"
 "             requires password to store hashes to restore/decrypt\n"
+"             will result in reduced compression for single systems\n"
 "         --exchange [backups|bundles|index] (can be\n"
 "          specified multiple times)\n"
 "         --help|-h show this message\n"

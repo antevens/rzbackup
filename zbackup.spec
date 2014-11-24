@@ -5,7 +5,7 @@ Release:        1
 License:        GPL v2+
 Group:          Applications/Archiving
 URL:            http://zbackup.org/
-Source0:        https://github.com/jalli/rzbackup/raw/master/archive/%{name}-%{version}.tar.gz
+Source0:        https://github.com/antevens/rzbackup/raw/master/archive/%{name}-%{version}.tar.gz
 BuildRequires:  cmake >= 2.6.2
 BuildRequires:  openssl-devel
 BuildRequires:  protobuf-devel

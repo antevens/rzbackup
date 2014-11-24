@@ -1,12 +1,12 @@
 Source: zbackup
 Section: utils
 Priority: extra
-Maintainer: Jarl Stefansson <jarl.stefansson@gmail.com>
+Maintainer: Antonia Stevens <a@antevens.com>
 Build-Depends: debhelper (>= 7.0.0), cmake, libssl-dev, libprotobuf-dev, liblzma-dev, zlib1g-dev, protobuf-compiler, g++
 Standards-Version: 3.9.2
 Homepage: http://zbackup.org/
-Vcs-Git: git://git@github.com:jalli/zbackup.git
-Vcs-Browser: https://github.com/jalli/zbackup
+Vcs-Git: git://git@github.com:antevens/zbackup.git
+Vcs-Browser: https://github.com/antevens/zbackup
 
 Package: zbackup
 Architecture: any
